@@ -96,11 +96,12 @@ class GameDatabase:
         table.create_index("id", unique=True)
         return self.load_into_table(table, glob_pattern)
 
-    def get_text(self, key, *, count=1, params={}):
+    def get_text(self, key, *, count=1, params={}, quiet=False):
         line = self.translations.lines.get(key)
 
         if not line:
-            warn(f"could not find text {key}")
+            if not quiet:
+                warn(f"could not find text {key}")
             return f"[MISSING TEXT: {key}]"
 
         return self.translations.interpolate(line, count=count, params=params)

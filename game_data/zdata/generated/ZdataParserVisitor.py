@@ -38,13 +38,13 @@ class ZdataParserVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by ZdataParser#groupingExpression.
-    def visitGroupingExpression(self, ctx:ZdataParser.GroupingExpressionContext):
+    # Visit a parse tree produced by ZdataParser#variableAccessExpression.
+    def visitVariableAccessExpression(self, ctx:ZdataParser.VariableAccessExpressionContext):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by ZdataParser#variableAccessExpression.
-    def visitVariableAccessExpression(self, ctx:ZdataParser.VariableAccessExpressionContext):
+    # Visit a parse tree produced by ZdataParser#groupingExpression.
+    def visitGroupingExpression(self, ctx:ZdataParser.GroupingExpressionContext):
         return self.visitChildren(ctx)
 
 

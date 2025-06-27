@@ -33,11 +33,11 @@ def serializedATN():
         46,47,3,8,4,0,47,7,1,0,0,0,48,49,5,32,0,0,49,54,5,32,0,0,50,51,5,
         1,0,0,51,52,3,10,5,0,52,53,5,2,0,0,53,55,1,0,0,0,54,50,1,0,0,0,54,
         55,1,0,0,0,55,56,1,0,0,0,56,57,5,10,0,0,57,58,3,10,5,0,58,9,1,0,
-        0,0,59,60,6,5,-1,0,60,67,3,14,7,0,61,62,5,3,0,0,62,63,3,10,5,0,63,
-        64,5,4,0,0,64,67,1,0,0,0,65,67,5,32,0,0,66,59,1,0,0,0,66,61,1,0,
-        0,0,66,65,1,0,0,0,67,100,1,0,0,0,68,69,10,8,0,0,69,70,7,0,0,0,70,
-        99,3,10,5,9,71,72,10,7,0,0,72,73,7,1,0,0,73,99,3,10,5,8,74,75,10,
-        6,0,0,75,76,5,12,0,0,76,99,3,10,5,7,77,80,10,3,0,0,78,79,5,11,0,
+        0,0,59,60,6,5,-1,0,60,67,3,14,7,0,61,67,5,32,0,0,62,63,5,3,0,0,63,
+        64,3,10,5,0,64,65,5,4,0,0,65,67,1,0,0,0,66,59,1,0,0,0,66,61,1,0,
+        0,0,66,62,1,0,0,0,67,100,1,0,0,0,68,69,10,7,0,0,69,70,7,0,0,0,70,
+        99,3,10,5,8,71,72,10,6,0,0,72,73,7,1,0,0,73,99,3,10,5,7,74,75,10,
+        5,0,0,75,76,5,12,0,0,76,99,3,10,5,6,77,80,10,8,0,0,78,79,5,11,0,
         0,79,81,5,32,0,0,80,78,1,0,0,0,81,82,1,0,0,0,82,80,1,0,0,0,82,83,
         1,0,0,0,83,99,1,0,0,0,84,85,10,2,0,0,85,86,5,1,0,0,86,87,3,10,5,
         0,87,88,5,2,0,0,88,99,1,0,0,0,89,90,10,1,0,0,90,92,5,3,0,0,91,93,
@@ -485,6 +485,22 @@ class ZdataParser ( Parser ):
                 return visitor.visitChildren(self)
 
 
+    class VariableAccessExpressionContext(ExpressionContext):
+
+        def __init__(self, parser, ctx:ParserRuleContext): # actually a ZdataParser.ExpressionContext
+            super().__init__(parser)
+            self.copyFrom(ctx)
+
+        def Identifier(self):
+            return self.getToken(ZdataParser.Identifier, 0)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitVariableAccessExpression" ):
+                return visitor.visitVariableAccessExpression(self)
+            else:
+                return visitor.visitChildren(self)
+
+
     class GroupingExpressionContext(ExpressionContext):
 
         def __init__(self, parser, ctx:ParserRuleContext): # actually a ZdataParser.ExpressionContext
@@ -502,22 +518,6 @@ class ZdataParser ( Parser ):
         def accept(self, visitor:ParseTreeVisitor):
             if hasattr( visitor, "visitGroupingExpression" ):
                 return visitor.visitGroupingExpression(self)
-            else:
-                return visitor.visitChildren(self)
-
-
-    class VariableAccessExpressionContext(ExpressionContext):
-
-        def __init__(self, parser, ctx:ParserRuleContext): # actually a ZdataParser.ExpressionContext
-            super().__init__(parser)
-            self.copyFrom(ctx)
-
-        def Identifier(self):
-            return self.getToken(ZdataParser.Identifier, 0)
-
-        def accept(self, visitor:ParseTreeVisitor):
-            if hasattr( visitor, "visitVariableAccessExpression" ):
-                return visitor.visitVariableAccessExpression(self)
             else:
                 return visitor.visitChildren(self)
 
@@ -702,23 +702,23 @@ class ZdataParser ( Parser ):
                 self.state = 60
                 self.literal()
                 pass
-            elif token in [3]:
-                localctx = ZdataParser.GroupingExpressionContext(self, localctx)
-                self._ctx = localctx
-                _prevctx = localctx
-                self.state = 61
-                self.match(ZdataParser.OpenParen)
-                self.state = 62
-                self.expression(0)
-                self.state = 63
-                self.match(ZdataParser.CloseParen)
-                pass
             elif token in [32]:
                 localctx = ZdataParser.VariableAccessExpressionContext(self, localctx)
                 self._ctx = localctx
                 _prevctx = localctx
-                self.state = 65
+                self.state = 61
                 self.match(ZdataParser.Identifier)
+                pass
+            elif token in [3]:
+                localctx = ZdataParser.GroupingExpressionContext(self, localctx)
+                self._ctx = localctx
+                _prevctx = localctx
+                self.state = 62
+                self.match(ZdataParser.OpenParen)
+                self.state = 63
+                self.expression(0)
+                self.state = 64
+                self.match(ZdataParser.CloseParen)
                 pass
             else:
                 raise NoViableAltException(self)
@@ -740,9 +740,9 @@ class ZdataParser ( Parser ):
                         localctx.left = _prevctx
                         self.pushNewRecursionContext(localctx, _startState, self.RULE_expression)
                         self.state = 68
-                        if not self.precpred(self._ctx, 8):
+                        if not self.precpred(self._ctx, 7):
                             from antlr4.error.Errors import FailedPredicateException
-                            raise FailedPredicateException(self, "self.precpred(self._ctx, 8)")
+                            raise FailedPredicateException(self, "self.precpred(self._ctx, 7)")
                         self.state = 69
                         localctx.op = self._input.LT(1)
                         _la = self._input.LA(1)
@@ -752,7 +752,7 @@ class ZdataParser ( Parser ):
                             self._errHandler.reportMatch(self)
                             self.consume()
                         self.state = 70
-                        localctx.right = self.expression(9)
+                        localctx.right = self.expression(8)
                         pass
 
                     elif la_ == 2:
@@ -760,9 +760,9 @@ class ZdataParser ( Parser ):
                         localctx.left = _prevctx
                         self.pushNewRecursionContext(localctx, _startState, self.RULE_expression)
                         self.state = 71
-                        if not self.precpred(self._ctx, 7):
+                        if not self.precpred(self._ctx, 6):
                             from antlr4.error.Errors import FailedPredicateException
-                            raise FailedPredicateException(self, "self.precpred(self._ctx, 7)")
+                            raise FailedPredicateException(self, "self.precpred(self._ctx, 6)")
                         self.state = 72
                         localctx.op = self._input.LT(1)
                         _la = self._input.LA(1)
@@ -772,7 +772,7 @@ class ZdataParser ( Parser ):
                             self._errHandler.reportMatch(self)
                             self.consume()
                         self.state = 73
-                        localctx.right = self.expression(8)
+                        localctx.right = self.expression(7)
                         pass
 
                     elif la_ == 3:
@@ -780,22 +780,22 @@ class ZdataParser ( Parser ):
                         localctx.left = _prevctx
                         self.pushNewRecursionContext(localctx, _startState, self.RULE_expression)
                         self.state = 74
-                        if not self.precpred(self._ctx, 6):
+                        if not self.precpred(self._ctx, 5):
                             from antlr4.error.Errors import FailedPredicateException
-                            raise FailedPredicateException(self, "self.precpred(self._ctx, 6)")
+                            raise FailedPredicateException(self, "self.precpred(self._ctx, 5)")
                         self.state = 75
                         self.match(ZdataParser.BitOr)
                         self.state = 76
-                        localctx.right = self.expression(7)
+                        localctx.right = self.expression(6)
                         pass
 
                     elif la_ == 4:
                         localctx = ZdataParser.MemberAccessExpressionContext(self, ZdataParser.ExpressionContext(self, _parentctx, _parentState))
                         self.pushNewRecursionContext(localctx, _startState, self.RULE_expression)
                         self.state = 77
-                        if not self.precpred(self._ctx, 3):
+                        if not self.precpred(self._ctx, 8):
                             from antlr4.error.Errors import FailedPredicateException
-                            raise FailedPredicateException(self, "self.precpred(self._ctx, 3)")
+                            raise FailedPredicateException(self, "self.precpred(self._ctx, 8)")
                         self.state = 80 
                         self._errHandler.sync(self)
                         _alt = 1
@@ -1378,19 +1378,19 @@ class ZdataParser ( Parser ):
 
     def expression_sempred(self, localctx:ExpressionContext, predIndex:int):
             if predIndex == 0:
-                return self.precpred(self._ctx, 8)
-         
-
-            if predIndex == 1:
                 return self.precpred(self._ctx, 7)
          
 
-            if predIndex == 2:
+            if predIndex == 1:
                 return self.precpred(self._ctx, 6)
          
 
+            if predIndex == 2:
+                return self.precpred(self._ctx, 5)
+         
+
             if predIndex == 3:
-                return self.precpred(self._ctx, 3)
+                return self.precpred(self._ctx, 8)
          
 
             if predIndex == 4:

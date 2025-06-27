@@ -194,7 +194,23 @@ class ZdataVisitor(ZdataParserVisitor):
 
     @override
     def visitFunctionCallExpression(self, ctx):
-        return self.visitChildren(ctx)
+        args = []
+        if ctx.expressionSequence():
+            args.extend(
+                self.visit(arg)
+                for arg in ctx.expressionSequence().getTypedRuleContexts(
+                    ZdataParser.ExpressionContext
+                )
+            )
+
+        if ctx.arrayLiteral():
+            args.append(self.visit(ctx.arrayLiteral()))
+
+        return {
+            "_type": "functionCall",
+            "name": ctx.expression().getText(),
+            "args": args,
+        }
 
 
 def parse_zdata_file(path) -> ParsedZdataFile:

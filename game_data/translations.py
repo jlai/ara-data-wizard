@@ -70,18 +70,20 @@ class LocalizedStrings:
             if count_str and count_str.isnumeric():
                 sub_count = int(count_str)
 
-            if key in params:
+            if key.startswith("TXT_"):
+                sub_line = self.lines.get(key)
+                if sub_line:
+                    return sub_line.get_plural(sub_count)
+            elif key in params:
                 value = params[key]
                 if isinstance(value, numbers.Number):
                     return f"{value:10g}"
 
                 return str(value)
-            else:
-                sub_line = self.lines.get(key)
-                if sub_line:
-                    return sub_line.get_plural(sub_count)
 
-            return f"?{key}?"
+            # Couldn't find key. Replace with slightly different format that
+            # doesn't trigger our pattern to avoid infinite loops.
+            return "((" + match.group(0).strip("{}") + "))"
 
         template = line.get_plural(count)
 

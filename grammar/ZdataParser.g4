@@ -24,12 +24,12 @@ assignmentStatement:
 
 expression:
 	literal													# literalExpression
+	| expression ('.' Identifier)+							# memberAccessExpression
 	| left = expression op = ('*' | '/') right = expression	# multiplicativeExpression
 	| left = expression op = ('+' | '-') right = expression	# additiveExpression
 	| left = expression '|' right = expression				# unionExpression
-	| '(' expression ')'									# groupingExpression
 	| Identifier											# variableAccessExpression
-	| expression ('.' Identifier)+							# memberAccessExpression
+	| '(' expression ')'									# groupingExpression
 	| base = expression '[' index = expression ']'			# indexingExpression
 	| expression '(' expressionSequence? ')' arrayLiteral?	# functionCallExpression;
 

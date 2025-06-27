@@ -4,7 +4,7 @@ import click
 import tomllib
 import os.path
 import glob
-from exporters.json import generate_json
+from exporters.json import ExportJsonOptions, generate_json
 from exporters.xlsx import generate_xlsx
 from game_data.database import GameDatabase
 from game_data.zdata.parse import parse_zdata_file
@@ -15,6 +15,8 @@ for config_location in [".AraWizard.toml", os.path.expanduser("~/.AraWizard.toml
     if os.path.exists(config_location):
         with open(config_location, "rb") as f:
             config = tomllib.load(f)
+
+json_config = config.get("json", {})
 
 
 @click.group()
@@ -48,10 +50,38 @@ def excel(assets_dir=None, output_filename=None):
     default=config.get("assets-dir"),
 )
 @click.option("-o", "output_filename", help="Output filename", default="ara-data.json")
-def json(assets_dir=None, output_filename=None):
+@click.option(
+    "--translate-text",
+    help="Convert fields with text keys into localized strings (English)",
+    default=json_config.get("translate-text", False),
+)
+@click.option(
+    "--remove-properties",
+    help="Property names to remove from all objects",
+    default=json_config.get("remove-properties", []),
+    type=list[str],
+)
+@click.option(
+    "--normalize-case",
+    help="Ensure that properties start with a lower case letter",
+    default=json_config.get("normalize-case", True),
+)
+def json(
+    assets_dir=None,
+    output_filename=None,
+    translate_text=True,
+    remove_properties=[],
+    normalize_case=True,
+):
     """Create a JSON file with various data from the game."""
     db = GameDatabase(assets_dir)
-    generate_json(output_filename, db)
+
+    options = ExportJsonOptions(
+        translate_text=translate_text,
+        remove_properties=remove_properties,
+        normalize_case=normalize_case,
+    )
+    generate_json(output_filename, db, options)
 
     click.echo(f"Data written to {output_filename}")
 
