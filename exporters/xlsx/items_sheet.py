@@ -1,6 +1,3 @@
-from itertools import zip_longest
-from natsort import natsorted
-
 from .base import SheetGenerator, ColumnTemplate
 from game_data.eras import ERA_RANKS
 from game_data.modifiers import get_modifier_text_params
@@ -22,33 +19,11 @@ class ItemsSheetGenerator(SheetGenerator):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.max_column = len(self.COLUMNS) - 1
-
-        self.merge_format = self.workbook.add_format(
-            {
-                "bold": True,
-                "border": 6,
-                "align": "left",
-                "valign": "vcenter",
-                "fg_color": "#D7E4BC",
-            }
-        )
 
     def create(self):
         self.setup_header(self.COLUMNS)
         self.write_eras()
         self.finish()
-
-    def write_era_header(self, text: str):
-        self.sheet.merge_range(
-            self.next_row,
-            0,
-            self.next_row,
-            self.max_column,
-            text,
-            self.merge_format,
-        )
-        self.next_row += 1
 
     def write_eras(self):
         items_by_era = {}
@@ -61,10 +36,10 @@ class ItemsSheetGenerator(SheetGenerator):
             )
 
         for era in self.db.eras.orderby(key=lambda era: ERA_RANKS[era.id]):
-            self.write_era_header(self.get_text(era.nameKey))
+            self.write_section_header(self.get_text(era.nameKey))
             self.write_items(items_by_era[era.id])
 
-        self.write_era_header("Raw materials")
+        self.write_section_header("Raw materials")
         self.write_items(items_by_era[""])
 
     def get_buffs(self, buff_ids):

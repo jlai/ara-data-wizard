@@ -2,7 +2,6 @@ from itertools import chain
 import os
 import glob
 from pathlib import PurePath
-from pprint import pp
 import types
 from warnings import warn
 from littletable import Table

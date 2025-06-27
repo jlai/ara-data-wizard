@@ -27,33 +27,11 @@ class ImprovementsSheetGenerator(SheetGenerator):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.max_column = len(self.COLUMNS) - 1
-
-        self.merge_format = self.workbook.add_format(
-            {
-                "bold": True,
-                "border": 6,
-                "align": "left",
-                "valign": "vcenter",
-                "fg_color": "#D7E4BC",
-            }
-        )
 
     def create(self):
         self.setup_header(self.COLUMNS)
         self.write_eras()
         self.finish()
-
-    def write_era_header(self, text: str):
-        self.sheet.merge_range(
-            self.next_row,
-            0,
-            self.next_row,
-            self.max_column,
-            text,
-            self.merge_format,
-        )
-        self.next_row += 1
 
     def write_eras(self):
         improvements_by_era = {}
@@ -65,10 +43,10 @@ class ImprovementsSheetGenerator(SheetGenerator):
             )
 
         for era in self.db.eras.orderby(key=lambda era: ERA_RANKS[era.id]):
-            self.write_era_header(self.get_text(era.nameKey))
+            self.write_section_header(self.get_text(era.nameKey))
             self.write_improvements(improvements_by_era[era.id])
 
-        self.write_era_header("Special")
+        self.write_section_header("Special")
         self.write_improvements(improvements_by_era[""])
 
     def get_recipe_name_by_id(self, recipe_id: str):

@@ -17,6 +17,16 @@ class SheetGenerator:
         self.sheet = sheet
         self.next_row = 0
 
+        self.merge_format = self.workbook.add_format(
+            {
+                "bold": True,
+                "border": 6,
+                "align": "left",
+                "valign": "vcenter",
+                "fg_color": "#D7E4BC",
+            }
+        )
+
     def write_row(self, columns):
         for i, column in enumerate(columns):
             self.sheet.write(self.next_row, i, column)
@@ -25,10 +35,30 @@ class SheetGenerator:
     def get_text(self, key, *, count=1, params={}):
         return self.db.get_text(key, count=count, params=params)
 
+    def write_section_header(self, text: str):
+        self.sheet.merge_range(
+            self.next_row,
+            0,
+            self.next_row,
+            self.sheet.dim_colmax,
+            text,
+            self.merge_format,
+        )
+        self.sheet.set_row(self.next_row, height=32)
+        self.next_row += 1
+
     def setup_header(self, column_templates: list[ColumnTemplate]):
         last_column = len(column_templates)
 
+        # Hide rows and columns outside range
+        self.sheet.set_column(
+            last_column, self.sheet.xls_colmax - 1, None, None, {"hidden": True}
+        )
+        self.sheet.set_default_row(hide_unused_rows=True)
+
+        # Write header
         self.write_row([column_template.name for column_template in column_templates])
+        self.sheet.set_row(0, 48)
 
         for c, column_template in enumerate(column_templates):
             column_format = self.workbook.add_format(
@@ -37,7 +67,6 @@ class SheetGenerator:
             self.sheet.set_column(c, c, None, column_format)
 
         # Hide rows and columns outside range
-        self.sheet.set_default_row(hide_unused_rows=True)
         self.sheet.set_column(
             last_column, self.sheet.xls_colmax - 1, None, None, {"hidden": True}
         )
