@@ -26,6 +26,16 @@ def ensure_dict(obj):
     return obj
 
 
+def get_tech_unlocks_ids(tech):
+    return (
+        getattr(tech, "UnlockImprovementsIDs", [])
+        + getattr(tech, "UnlockRecipesIDs", [])
+        + getattr(tech, "UnlockFormationsIDs", [])
+        + getattr(tech, "UnlockGovernmentsIDs", [])
+        + [obj["Value"] for obj in getattr(tech, "UnlockNaturalResourcesIDs", [])]
+    )
+
+
 def glob_assets(assets_dir, include, exclude="*DLC*"):
     matches = glob.glob(include, root_dir=assets_dir)
 
@@ -96,7 +106,7 @@ class GameDatabase:
 
     def build_crossrefs(self):
         for tech in self.techs:
-            for unlock in tech.UnlockImprovementsIDs + tech.UnlockRecipesIDs:
+            for unlock in get_tech_unlocks_ids(tech):
                 self.unlocks.insert(
                     {
                         "unlocks_id": unlock,
@@ -202,6 +212,28 @@ class GameDatabase:
 
         if getattr(item, "TargetUnitID", None):
             unit = self.units.by.id[item.TargetUnitID]
-            return ("unit", unit.Name)
+            return (item.TargetUnitID, unit.Name)
 
-        return ("item", item.Name)
+        return (item.id, item.Name)
+
+    def get_name_text(self, id: str):
+        return self.get_text(self.get_name_key(id))
+
+    def get_name_key(self, id: str):
+        prefix = id.split("_", 1)[0]
+
+        match prefix:
+            case "imp":
+                return self.improvements.by.id[id].Name
+            case "itm":
+                return self.items.by.id[id].Name
+            case "rcp":
+                return self.get_recipe_product(id)[1]
+            case "tch":
+                return self.techs.by.id[id].Name
+            case "unt":
+                return self.units.by.id[id].Name
+            case "frm":
+                return self.formations.by.id[id].Name
+            case "gvt":
+                return self.governments.by.id[id].m_Name

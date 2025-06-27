@@ -1,6 +1,7 @@
+from game_data.database import get_tech_unlocks_ids
 from .base import SheetGenerator, ColumnTemplate
 from game_data.eras import ERA_RANKS
-from game_data.modifiers import get_modifier_text_params
+from littletable import Table
 
 
 class TechsSheetGenerator(SheetGenerator):
@@ -12,7 +13,7 @@ class TechsSheetGenerator(SheetGenerator):
         ColumnTemplate("Unlocked resources"),
         ColumnTemplate("Unlocked units"),
         ColumnTemplate("Unlocked formations"),
-        ColumnTemplate("Unlocked governments"),
+        ColumnTemplate("Unique to this tech"),
     ]
 
     def __init__(self, *args):
@@ -38,6 +39,17 @@ class TechsSheetGenerator(SheetGenerator):
         for tech in techs:
             self.write_tech(tech)
 
+    def get_unique_unlocks(self, tech):
+        unlocks_ids = get_tech_unlocks_ids(tech)
+
+        unlocked_elsewhere = (
+            self.db.unlocks.where(unlocks_id=Table.is_in(unlocks_ids))
+            .where(tech_id=Table.ne(tech.id))
+            .all.unlocks_id
+        )
+
+        return set(unlocks_ids) - set(unlocked_elsewhere)
+
     def write_tech(self, tech):
         unlocked_improvements = sorted(
             self.get_text(self.db.improvements.by.id[id].Name)
@@ -47,8 +59,8 @@ class TechsSheetGenerator(SheetGenerator):
         unlocked_units = []
         unlocked_items = []
         for recipe_id in tech.UnlockRecipesIDs:
-            product_type, name = self.db.get_recipe_product(recipe_id)
-            if product_type == "unit":
+            id, name = self.db.get_recipe_product(recipe_id)
+            if id.startswith("unt_"):
                 unlocked_units.append(self.get_text(name))
             else:
                 unlocked_items.append(self.get_text(name))
@@ -63,9 +75,8 @@ class TechsSheetGenerator(SheetGenerator):
             for obj in tech.UnlockNaturalResourcesIDs
         )
 
-        unlocked_governments = sorted(
-            self.get_text(self.db.governments.by.id[id].m_Name)
-            for id in tech.UnlockGovernmentsIDs
+        unique_unlocks = sorted(
+            self.db.get_name_text(id) for id in self.get_unique_unlocks(tech)
         )
 
         self.write_row(
@@ -77,6 +88,6 @@ class TechsSheetGenerator(SheetGenerator):
                 "\n".join(unlocked_resources),
                 "\n".join(unlocked_units),
                 "\n".join(unlocked_formations),
-                "\n".join(unlocked_governments),
+                "\n".join(unique_unlocks),
             ]
         )
