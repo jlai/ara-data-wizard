@@ -8,11 +8,11 @@ class TechsSheetGenerator(SheetGenerator):
     COLUMNS = [
         ColumnTemplate("Name"),
         ColumnTemplate("Research cost"),
-        ColumnTemplate("Unlocks improvements\n(* = unique to this tech)"),
-        ColumnTemplate("Unlocks goods"),
-        ColumnTemplate("Unlocks resources"),
-        ColumnTemplate("Unlocks units"),
-        ColumnTemplate("Unlocks formations"),
+        ColumnTemplate("Improvements\n(* = unique to this tech)"),
+        ColumnTemplate("Goods"),
+        ColumnTemplate("Resources"),
+        ColumnTemplate("Units"),
+        ColumnTemplate("Formations"),
         ColumnTemplate("Special"),
         ColumnTemplate("Obsoletes"),
     ]
