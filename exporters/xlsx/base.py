@@ -2,6 +2,7 @@ from xlsxwriter.workbook import Workbook
 from xlsxwriter.worksheet import Worksheet
 
 from game_data.database import GameDatabase
+from game_data.modifiers import get_modifier_text_params
 
 
 class ColumnTemplate:
@@ -74,3 +75,14 @@ class SheetGenerator:
     def finish(self):
         self.sheet.autofit(300)
         self.sheet.freeze_panes(1, 1)
+
+    def describe_buffs(self, buff_ids):
+        descs = []
+        for buff_id in buff_ids:
+            if not buff_id:
+                continue
+
+            buff = self.db.buffs.by.id[buff_id]
+            params = get_modifier_text_params(buff.Modifiers)
+            descs.append(self.get_text(buff.Description, params=params))
+        return descs

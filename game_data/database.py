@@ -50,15 +50,25 @@ class GameDatabase:
 
         self.translations = self.load_translations()
         self.rules = self.load_game_rules()
-        self.buffs = self.load_buffs()
-        self.improvements = self.load_improvements()
-        self.techs = self.load_techs()
-        self.items = self.load_items()
-        self.recipes = self.load_recipes()
-        self.units = self.load_units()
-        self.city_unit_projects = self.load_city_unit_projects()
+
+        self.improvements = self.load_table("improvements", "Improvements*.zdata")
+        self.techs = self.load_table("techs", "Technologies*.zdata")
+        self.items = self.load_table("items", "Items*.zdata")
+        self.buffs = self.load_table("buffs", "Buffs/Buffs*.zdata")
+        self.recipes = self.load_table("recipes", "Recipes*.zdata")
+        self.units = self.load_table("units", "Units*.zdata")
+        self.formations = self.load_table("formations", "ArmyTemplates*.zdata")
+        self.governments = self.load_table("governments", "Governments*.zdata")
+        self.city_unit_projects = self.load_table(
+            "city_unit_projects", "CityUnitProjects*.zdata"
+        )
 
         self.build_crossrefs()
+
+    def load_table(self, name, glob_pattern):
+        table = Table(name)
+        table.create_index("id", unique=True)
+        return self.load_into_table(table, glob_pattern)
 
     def get_text(self, key, *, count=1, params={}):
         line = self.translations.lines.get(key)
@@ -143,8 +153,10 @@ class GameDatabase:
         return LocalizedStrings(locale_id, lines)
 
     def load_zdata_files(self, glob_path: str):
-        for path in glob_assets(self.assets_dir, glob_path):
-            yield parse_zdata_file(os.path.join(self.assets_dir, path))
+        zdata_path = os.path.join(self.assets_dir, "SourceMods")
+
+        for path in glob_assets(zdata_path, glob_path):
+            yield parse_zdata_file(os.path.join(zdata_path, path))
 
     def load_into_table(self, table: Table, glob_path: str):
         for zdata in self.load_zdata_files(glob_path):
@@ -159,7 +171,7 @@ class GameDatabase:
     def load_game_rules(self):
         rules = {}
 
-        for zdata in self.load_zdata_files("SourceMods/GameRules/*.zdata"):
+        for zdata in self.load_zdata_files("GameRules/*.zdata"):
             root = zdata.exports.get("Root")
 
             if root and "_type" in root:
@@ -173,48 +185,6 @@ class GameDatabase:
 
         return rules
 
-    def load_improvements(self):
-        improvements = Table("improvements")
-        improvements.create_index("id", unique=True)
-
-        return self.load_into_table(improvements, "SourceMods/Improvements*.zdata")
-
-    def load_techs(self):
-        techs = Table("techs")
-        techs.create_index("id", unique=True)
-
-        return self.load_into_table(techs, "SourceMods/Technologies*.zdata")
-
-    def load_items(self):
-        items = Table("items")
-        items.create_index("id", unique=True)
-
-        return self.load_into_table(items, "SourceMods/Items*.zdata")
-
-    def load_buffs(self):
-        buffs = Table("buffs")
-        buffs.create_index("id", unique=True)
-
-        return self.load_into_table(buffs, "SourceMods/Buffs/Buffs*.zdata")
-
-    def load_recipes(self):
-        recipes = Table("recipes")
-        recipes.create_index("id", unique=True)
-
-        return self.load_into_table(recipes, "SourceMods/Recipe*.zdata")
-
-    def load_units(self):
-        units = Table("units")
-        units.create_index("id", unique=True)
-
-        return self.load_into_table(units, "SourceMods/Units*.zdata")
-
-    def load_city_unit_projects(self):
-        table = Table("city_unit_projects")
-        table.create_index("id", unique=True)
-
-        return self.load_into_table(table, "SourceMods/CityUnitProjects.zdata")
-
     def get_earliest_era_id(self, unlock_id: str):
         earliest_unlock = min(
             self.unlocks.by.unlocks_id[unlock_id],
@@ -224,3 +194,14 @@ class GameDatabase:
         if earliest_unlock:
             return earliest_unlock.era_id
         return ""
+
+    def get_recipe_product(self, recipe_id):
+        "Resolve recipe to a normal item or a unit (instead of the pseudo-item for a unit)"
+        recipe = self.recipes.by.id[recipe_id]
+        item = self.items.by.id[recipe.ItemCreated]
+
+        if getattr(item, "TargetUnitID", None):
+            unit = self.units.by.id[item.TargetUnitID]
+            return ("unit", unit.Name)
+
+        return ("item", item.Name)

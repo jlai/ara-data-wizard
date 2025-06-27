@@ -97,72 +97,65 @@ class ImprovementsSheetGenerator(SheetGenerator):
 
     def write_improvements(self, improvements):
         for improvement in improvements:
-            build_cost = self.db.get_item_quantities(
-                improvement.BuildImprovementItemCost
+            self.write_improvement(improvement)
+
+    def write_improvement(self, improvement):
+        build_cost = self.db.get_item_quantities(improvement.BuildImprovementItemCost)
+
+        previous_level = improvement.PrevLevelID
+        upgrade_info = ""
+
+        if previous_level:
+            previous_improvement = self.db.improvements.by.id[previous_level]
+            upgrade_cost = self.db.get_item_quantities(
+                improvement.UpgradeToImprovementItemCost
             )
-
-            previous_level = improvement.PrevLevelID
-            upgrade_info = ""
-
-            if previous_level:
-                previous_improvement = self.db.improvements.by.id[previous_level]
-                upgrade_cost = self.db.get_item_quantities(
-                    improvement.UpgradeToImprovementItemCost
-                )
-                upgrade_info = "\n".join(
-                    [
-                        f"Upgrade from {self.get_text(previous_improvement.Name)}\n",
-                        *upgrade_cost,
-                    ]
-                )
-
-            techs = (
-                self.db.unlocks.where(unlocks_id=improvement.id)
-                .join(self.db.techs, tech_id="id")
-                .orderby("era_rank")
-            )
-
-            worker_slots = improvement.WorkerSlots
-            slot_descs = []
-            for i, slot in zip_longest(range(1, 5), worker_slots[0:4]):
-                if slot:
-                    descs = []
-
-                    for buff_id in slot["Buffs"]:
-                        buff = self.db.buffs.by.id[buff_id]
-                        params = get_modifier_text_params(buff.Modifiers)
-                        descs.append(self.get_text(buff.Description, params=params))
-
-                    slot_descs.append("\n".join(descs))
-                else:
-                    slot_descs.append("")
-
-            maintainance_costs = []
-            for i, slot in enumerate(worker_slots):
-                cost = "\n".join(
-                    natsorted(self.db.get_item_quantities(slot["Maintenance"]))
-                )
-
-                if len(maintainance_costs) > 0 and maintainance_costs[-1] == cost:
-                    continue
-
-                maintainance_costs.append(
-                    f"\nWith {i} experts:\n{cost}" if i > 0 else cost
-                )
-
-            self.write_row(
+            upgrade_info = "\n".join(
                 [
-                    self.get_text(improvement.Name),
-                    "\n".join([self.get_text(tech.Name) for tech in techs]),
-                    improvement.uiNationMaxCount or "",
-                    improvement.uiProvinceMaxCount or "",
-                    *slot_descs,
-                    "\n".join(sorted(self.get_crafting_outputs(improvement))),
-                    "\n".join(sorted(self.get_crafting_inputs(improvement))),
-                    "\n".join(sorted(self.get_supply_options(improvement))),
-                    improvement.uiProductionCost,
-                    "\n".join(natsorted(build_cost)),
-                    upgrade_info,
-                    "\n".join(maintainance_costs),
-                ],
+                    f"Upgrade from {self.get_text(previous_improvement.Name)}\n",
+                    *upgrade_cost,
+                ]
             )
+
+        techs = (
+            self.db.unlocks.where(unlocks_id=improvement.id)
+            .join(self.db.techs, tech_id="id")
+            .orderby("era_rank")
+        )
+
+        worker_slots = improvement.WorkerSlots
+        slot_descs = []
+        for i, slot in zip_longest(range(1, 5), worker_slots[0:4]):
+            if slot:
+                descs = self.describe_buffs(slot["Buffs"])
+                slot_descs.append("\n".join(descs))
+            else:
+                slot_descs.append("")
+
+        maintainance_costs = []
+        for i, slot in enumerate(worker_slots):
+            cost = "\n".join(
+                natsorted(self.db.get_item_quantities(slot["Maintenance"]))
+            )
+
+            if len(maintainance_costs) > 0 and maintainance_costs[-1] == cost:
+                continue
+
+            maintainance_costs.append(f"\nWith {i} experts:\n{cost}" if i > 0 else cost)
+
+        self.write_row(
+            [
+                self.get_text(improvement.Name),
+                "\n".join([self.get_text(tech.Name) for tech in techs]),
+                improvement.uiNationMaxCount or "",
+                improvement.uiProvinceMaxCount or "",
+                *slot_descs,
+                "\n".join(sorted(self.get_crafting_outputs(improvement))),
+                "\n".join(sorted(self.get_crafting_inputs(improvement))),
+                "\n".join(sorted(self.get_supply_options(improvement))),
+                improvement.uiProductionCost,
+                "\n".join(natsorted(build_cost)),
+                upgrade_info,
+                "\n".join(maintainance_costs),
+            ],
+        )

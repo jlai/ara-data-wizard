@@ -4,6 +4,7 @@ from game_data.database import GameDatabase
 
 from .improvements_sheet import ImprovementsSheetGenerator
 from .items_sheet import ItemsSheetGenerator
+from .techs_sheet import TechsSheetGenerator
 
 
 def generate_xlsx(filename: str, db: GameDatabase):
@@ -11,4 +12,5 @@ def generate_xlsx(filename: str, db: GameDatabase):
         ImprovementsSheetGenerator(
             db, workbook, workbook.add_worksheet("Improvements")
         ).create()
-        ItemsSheetGenerator(db, workbook, workbook.add_worksheet("Items")).create()
+        ItemsSheetGenerator(db, workbook, workbook.add_worksheet("Goods")).create()
+        TechsSheetGenerator(db, workbook, workbook.add_worksheet("Techs")).create()

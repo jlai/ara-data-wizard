@@ -42,68 +42,60 @@ class ItemsSheetGenerator(SheetGenerator):
         self.write_section_header("Raw materials")
         self.write_items(items_by_era[""])
 
-    def get_buffs(self, buff_ids):
-        descs = []
-        for buff_id in buff_ids:
-            if not buff_id:
-                continue
-
-            buff = self.db.buffs.by.id[buff_id]
-            params = get_modifier_text_params(buff.Modifiers)
-            descs.append(self.get_text(buff.Description, params=params))
-        return descs
-
     def write_items(self, items):
         for item in items:
-            techs = (
-                self.db.unlocks.where(unlocks_id=item.RecipeID)
-                .join(self.db.techs, tech_id="id")
-                .orderby("era_rank")
-            )
+            self.write_item(item)
 
-            amenity_buffs = self.get_buffs(getattr(item, "ActivateBuffs", []))
-            supply_buffs = self.get_buffs(
-                getattr(item, "ActivateBuffsForImprovements", [])
-            )
+    def write_item(self, item):
+        techs = (
+            self.db.unlocks.where(unlocks_id=item.RecipeID)
+            .join(self.db.techs, tech_id="id")
+            .orderby("era_rank")
+        )
 
-            supplied_improvements = sorted(
-                set(
-                    self.get_text(supply.improvement_name)
-                    for supply in self.db.supplies.where(item_id=item.id)
+        amenity_buffs = self.describe_buffs(getattr(item, "ActivateBuffs", []))
+        supply_buffs = self.describe_buffs(
+            getattr(item, "ActivateBuffsForImprovements", [])
+        )
+
+        supplied_improvements = sorted(
+            set(
+                self.get_text(supply.improvement_name)
+                for supply in self.db.supplies.where(item_id=item.id)
+            )
+        )
+
+        construction_projects = sorted(
+            f"{self.get_text(record.construction_name)} ({record.count_needed})"
+            for record in self.db.construction_costs.by.item_id[item.id]
+        )
+
+        production_cost = ""
+
+        try:
+            recipe = self.db.recipes.by.id[item.RecipeID]
+        except:
+            recipe = None
+
+        accelerators = ["", "", ""]
+        if recipe:
+            production_cost = recipe.ProductionCost
+
+            for i, ingredient in enumerate((recipe.Ingredients or [])[0:3]):
+                accelerators[i] = (
+                    " /\n".join(self.db.get_item_quantities(ingredient["Options"]))
+                    + f"\n\n{ingredient['ProductionBonus']:+g} ⚙️"
                 )
-            )
 
-            construction_projects = sorted(
-                f"{self.get_text(record.construction_name)} ({record.count_needed})"
-                for record in self.db.construction_costs.by.item_id[item.id]
-            )
-
-            production_cost = ""
-
-            try:
-                recipe = self.db.recipes.by.id[item.RecipeID]
-            except:
-                recipe = None
-
-            accelerators = ["", "", ""]
-            if recipe:
-                production_cost = recipe.ProductionCost
-
-                for i, ingredient in enumerate((recipe.Ingredients or [])[0:3]):
-                    accelerators[i] = (
-                        " /\n".join(self.db.get_item_quantities(ingredient["Options"]))
-                        + f"\n\n{ingredient['ProductionBonus']:+g} ⚙️"
-                    )
-
-            self.write_row(
-                [
-                    self.get_text(item.Name),
-                    "\n".join([self.get_text(tech.Name) for tech in techs]),
-                    "\n".join(amenity_buffs),
-                    "\n".join(supply_buffs),
-                    "\n".join(supplied_improvements),
-                    "\n".join(construction_projects),
-                    production_cost,
-                    *accelerators,
-                ]
-            )
+        self.write_row(
+            [
+                self.get_text(item.Name),
+                "\n".join([self.get_text(tech.Name) for tech in techs]),
+                "\n".join(amenity_buffs),
+                "\n".join(supply_buffs),
+                "\n".join(supplied_improvements),
+                "\n".join(construction_projects),
+                production_cost,
+                *accelerators,
+            ]
+        )
