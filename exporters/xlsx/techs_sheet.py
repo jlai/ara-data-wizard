@@ -1,4 +1,4 @@
-from game_data.database import get_tech_unlocks_ids
+from game_data.database import get_tech_obsoletes_ids, get_tech_unlocks_ids
 from .base import SheetGenerator, ColumnTemplate
 from game_data.eras import ERA_RANKS
 from littletable import Table
@@ -8,12 +8,13 @@ class TechsSheetGenerator(SheetGenerator):
     COLUMNS = [
         ColumnTemplate("Name"),
         ColumnTemplate("Research cost"),
-        ColumnTemplate("Unlocked improvements"),
-        ColumnTemplate("Unlocked goods"),
-        ColumnTemplate("Unlocked resources"),
-        ColumnTemplate("Unlocked units"),
-        ColumnTemplate("Unlocked formations"),
-        ColumnTemplate("Unique to this tech"),
+        ColumnTemplate("Unlocks improvements\n(* = unique to this tech)"),
+        ColumnTemplate("Unlocks goods"),
+        ColumnTemplate("Unlocks resources"),
+        ColumnTemplate("Unlocks units"),
+        ColumnTemplate("Unlocks formations"),
+        ColumnTemplate("Special"),
+        ColumnTemplate("Obsoletes"),
     ]
 
     def __init__(self, *args):
@@ -40,6 +41,8 @@ class TechsSheetGenerator(SheetGenerator):
             self.write_tech(tech)
 
     def get_unique_unlocks(self, tech):
+        "Returns a set() of ids that are only unlocked by this tech"
+
         unlocks_ids = get_tech_unlocks_ids(tech)
 
         unlocked_elsewhere = (
@@ -51,43 +54,52 @@ class TechsSheetGenerator(SheetGenerator):
         return set(unlocks_ids) - set(unlocked_elsewhere)
 
     def write_tech(self, tech):
-        unlocked_improvements = sorted(
-            self.get_text(self.db.improvements.by.id[id].Name)
-            for id in tech.UnlockImprovementsIDs
-        )
+        unlocks_ids = get_tech_unlocks_ids(tech)
 
-        unlocked_units = []
-        unlocked_items = []
-        for recipe_id in tech.UnlockRecipesIDs:
-            id, name = self.db.get_recipe_product(recipe_id)
-            if id.startswith("unt_"):
-                unlocked_units.append(self.get_text(name))
-            else:
-                unlocked_items.append(self.get_text(name))
+        unique_unlocks = self.get_unique_unlocks(tech)
 
-        unlocked_formations = sorted(
-            self.get_text(self.db.formations.by.id[id].Name)
-            for id in tech.UnlockedFormationsIDs
-        )
+        improvements = []
+        units = []
+        items = []
+        formations = []
+        resources = []
+        special = []
 
-        unlocked_resources = sorted(
-            self.get_text(self.db.items.by.id[obj["Value"]].Name)
-            for obj in tech.UnlockNaturalResourcesIDs
-        )
+        for id in unlocks_ids:
+            prefix = id.split("_", 1)[0]
+            name = self.db.get_name_text(id)
+            desc = f"{name} *" if id in unique_unlocks else name
 
-        unique_unlocks = sorted(
-            self.db.get_name_text(id) for id in self.get_unique_unlocks(tech)
+            match prefix:
+                case "imp":
+                    improvements.append(desc)
+                case "frm":
+                    formations.append(desc)
+                case "itm":
+                    resources.append(desc)
+                case "rcp":
+                    product_id = self.db.get_recipe_product(id)[0]
+                    if product_id.startswith("unt_"):
+                        units.append(desc)
+                    else:
+                        items.append(desc)
+                case _:
+                    special.append(desc)
+
+        obsoletes = sorted(
+            self.db.get_name_text(id) for id in get_tech_obsoletes_ids(tech)
         )
 
         self.write_row(
             [
                 self.get_text(tech.Name),
                 tech.uiResearchCost,
-                "\n".join(unlocked_improvements),
-                "\n".join(unlocked_items),
-                "\n".join(unlocked_resources),
-                "\n".join(unlocked_units),
-                "\n".join(unlocked_formations),
-                "\n".join(unique_unlocks),
+                "\n".join(improvements),
+                "\n".join(items),
+                "\n".join(resources),
+                "\n".join(units),
+                "\n".join(formations),
+                "\n".join(special),
+                "\n".join(obsoletes),
             ]
         )

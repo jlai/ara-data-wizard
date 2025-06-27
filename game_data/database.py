@@ -32,7 +32,17 @@ def get_tech_unlocks_ids(tech):
         + getattr(tech, "UnlockRecipesIDs", [])
         + getattr(tech, "UnlockFormationsIDs", [])
         + getattr(tech, "UnlockGovernmentsIDs", [])
+        + getattr(tech, "UnlockCitySpecialProjects", [])
+        + getattr(tech, "UnlockCityMissileProjects", [])
         + [obj["Value"] for obj in getattr(tech, "UnlockNaturalResourcesIDs", [])]
+    )
+
+
+def get_tech_obsoletes_ids(tech):
+    return (
+        getattr(tech, "ObsoleteImprovementIDs", [])
+        + getattr(tech, "ObsoleteCityUnitProjectIDs", [])
+        + getattr(tech, "ObsoleteRecipes", [])
     )
 
 
@@ -71,6 +81,12 @@ class GameDatabase:
         self.governments = self.load_table("governments", "Governments*.zdata")
         self.city_unit_projects = self.load_table(
             "city_unit_projects", "CityUnitProjects*.zdata"
+        )
+        self.city_special_projects = self.load_table(
+            "city_special_projects", "CitySpecialProjects*.zdata"
+        )
+        self.city_missile_projects = self.load_table(
+            "city_missile_projects", "CityMissileProjects*.zdata"
         )
 
         self.build_crossrefs()
@@ -237,3 +253,12 @@ class GameDatabase:
                 return self.formations.by.id[id].Name
             case "gvt":
                 return self.governments.by.id[id].m_Name
+            case "cup":
+                cup = self.city_unit_projects.by.id[id]
+                item = self.items.by.id[cup.UnitItemCreated]
+                unit = self.units.by.id[item.TargetUnitID]
+                return unit.Name
+            case "csp":
+                return self.city_special_projects.by.id[id].Name
+            case "cmp":
+                return self.city_missile_projects.by.id[id].Name
