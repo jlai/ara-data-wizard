@@ -1,6 +1,11 @@
 antlr4-python3-runtime==4.13.2
 click==8.2.1
 colorama==0.4.6
+iniconfig==2.1.0
 littletable==3.0.2
 natsort==8.4.0
+packaging==25.0
+pluggy==1.6.0
+Pygments==2.19.2
+pytest==8.4.1
 xlsxwriter==3.2.5

@@ -213,15 +213,21 @@ class ZdataVisitor(ZdataParserVisitor):
         }
 
 
+def parse_zdata_stream(stream) -> ParsedZdataFile:
+    lexer = ZdataLexer(stream)
+    stream = CommonTokenStream(lexer)
+    parser = ZdataParser(stream)
+    tree = parser.program()
+    output = ZdataVisitor().visit(tree)
+
+    output.num_errors = parser.getNumberOfSyntaxErrors()
+
+    return output
+
+
 def parse_zdata_file(path) -> ParsedZdataFile:
     try:
-        lexer = ZdataLexer(FileStream(path))
-        stream = CommonTokenStream(lexer)
-        parser = ZdataParser(stream)
-        tree = parser.program()
-        output = ZdataVisitor().visit(tree)
-
-        output.num_errors = parser.getNumberOfSyntaxErrors()
+        output = parse_zdata_stream(FileStream(path))
     except Exception as e:
         raise Exception(f"error parsing file {path}") from e
 
