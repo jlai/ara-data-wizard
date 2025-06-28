@@ -31,9 +31,7 @@ MANIFEST
 
 # Local generated files
 .AraWizard.toml
-.\~lock*
-Ara Game Data.xlsx
-ara-data.json
+out/*
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

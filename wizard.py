@@ -4,6 +4,7 @@ import click
 import tomllib
 import os.path
 import glob
+from exporters.graphviz import export_to_graphviz
 from exporters.json import ExportJsonOptions, generate_json
 from exporters.xlsx import generate_xlsx
 from game_data.database import GameDatabase
@@ -19,6 +20,10 @@ for config_location in [".AraWizard.toml", os.path.expanduser("~/.AraWizard.toml
 json_config = config.get("json", {})
 
 
+def ensure_directory(path):
+    os.makedirs(os.path.dirname(path))
+
+
 @click.group()
 def cli():
     pass
@@ -32,11 +37,13 @@ def cli():
     default=config.get("assets-dir"),
 )
 @click.option(
-    "-o", "output_filename", help="Output filename", default="Ara Game Data.xlsx"
+    "-o", "output_filename", help="Output filename", default="out/Ara Game Data.xlsx"
 )
 def excel(assets_dir=None, output_filename=None):
     """Create a XLSX file with various data from the game."""
     db = GameDatabase(assets_dir)
+
+    ensure_directory(output_filename)
     generate_xlsx(output_filename, db)
 
     click.echo(f"Spreadsheet written to {output_filename}")
@@ -49,7 +56,9 @@ def excel(assets_dir=None, output_filename=None):
     required=True,
     default=config.get("assets-dir"),
 )
-@click.option("-o", "output_filename", help="Output filename", default="ara-data.json")
+@click.option(
+    "-o", "output_filename", help="Output filename", default="out/ara-data.json"
+)
 @click.option(
     "--translate-text",
     help="Convert fields with text keys into localized strings (English)",
@@ -81,6 +90,8 @@ def json(
         remove_properties=remove_properties,
         normalize_case=normalize_case,
     )
+
+    ensure_directory(output_filename)
     generate_json(output_filename, db, options)
 
     click.echo(f"Data written to {output_filename}")
@@ -130,6 +141,26 @@ def validate(directory, keep_going=False, include=None, exclude=None, quiet=Fals
 
     if not quiet:
         click.echo(f"Validated {count} files")
+
+
+@cli.command()
+@click.option(
+    "--assets-dir",
+    help="Game assets directory path",
+    required=True,
+    default=config.get("assets-dir"),
+)
+@click.option(
+    "-o", "output_filename", help="Output filename", default="out/Ara Goods.png"
+)
+def graphviz(assets_dir=None, output_filename=None):
+    """Visualize goods dependencies using graphviz"""
+    db = GameDatabase(assets_dir)
+
+    ensure_directory(output_filename)
+    export_to_graphviz(output_filename, db)
+
+    click.echo(f"Graph written to {output_filename}")
 
 
 if __name__ == "__main__":

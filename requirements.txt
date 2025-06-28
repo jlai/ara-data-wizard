@@ -1,6 +1,7 @@
 antlr4-python3-runtime==4.13.2
 click==8.2.1
 colorama==0.4.6
+graphviz==0.21
 iniconfig==2.1.0
 littletable==3.0.2
 natsort==8.4.0
