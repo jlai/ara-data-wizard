@@ -8,6 +8,7 @@ from exporters.graphviz import export_to_graphviz
 from exporters.json import ExportJsonOptions, generate_json
 from exporters.xlsx import generate_xlsx
 from game_data.database import GameDatabase
+from game_data.images import extract_atlas_images
 from game_data.zdata.parse import parse_zdata_file
 
 config = {}
@@ -21,7 +22,7 @@ json_config = config.get("json", {})
 
 
 def ensure_directory(path):
-    os.makedirs(os.path.dirname(path))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
 
 @click.group()
@@ -151,16 +152,38 @@ def validate(directory, keep_going=False, include=None, exclude=None, quiet=Fals
     default=config.get("assets-dir"),
 )
 @click.option(
-    "-o", "output_filename", help="Output filename", default="out/Ara Goods.png"
+    "-o", "output_filename", help="Output filename", default="out/Ara Goods.svg"
 )
 def graphviz(assets_dir=None, output_filename=None):
     """Visualize goods dependencies using graphviz"""
     db = GameDatabase(assets_dir)
 
     ensure_directory(output_filename)
-    export_to_graphviz(output_filename, db)
+    export_to_graphviz(output_filename, db, assets_dir=assets_dir)
 
     click.echo(f"Graph written to {output_filename}")
+
+
+@cli.command()
+@click.option(
+    "--assets-dir",
+    help="Game assets directory path",
+    required=True,
+    default=config.get("assets-dir"),
+)
+@click.argument("image_path")
+@click.option("-o", "output_dir", help="Output directory", default="out/images")
+def images(assets_dir=None, image_path=None, output_dir=None):
+    """Extract images from image atlas"""
+    full_path = os.path.join(assets_dir, image_path)
+
+    ensure_directory(output_dir + "/")
+    extract_atlas_images(
+        xml_path=full_path,
+        output_dir=output_dir,
+    )
+
+    click.echo(f"Images written to {output_dir}")
 
 
 if __name__ == "__main__":
