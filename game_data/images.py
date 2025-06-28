@@ -23,4 +23,4 @@ def extract_atlas_images(
             if size:
                 cropped = cropped.resize(size)
 
-            cropped.save(os.path.join(output_dir, f"{id}.png"))
+            cropped.save(os.path.join(output_dir, f"{id}.png"), optimize=True)

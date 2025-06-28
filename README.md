@@ -28,7 +28,15 @@ Alternatively, you can pass it via `--assets-dir=` on the command line.
 To generate an Excel (.xlsx) spreadsheet:
 
 ```bash
-python wizard.py excel -o "Ara Game Data.xlsx"
+python wizard.py excel -o "out/Ara Game Data.xlsx"
+```
+
+## Visualizing goods with Graphviz
+
+You can output a dependency graph of the goods crafting in the game. Sample output [here](docs/Ara%20Goods%201.4.pdf).
+
+```bash
+python wizard.py graphviz -o "out/Ara Goods.pdf"
 ```
 
 ## Exporting to JSON
@@ -36,10 +44,19 @@ python wizard.py excel -o "Ara Game Data.xlsx"
 To dump a .json file:
 
 ```bash
-python wizard.py json -o ara.json
+python wizard.py json -o out/ara.json
 ```
 
 You can then query the file with a tool like [jq](https://jqlang.org/tutorial/).
+
+## Extracting images
+
+You can extract individual images from image atlases by pointing at the .xml file
+(relative to the assets directory):
+
+```
+python wizard.py images -o "out/images" UI/Art/Icons/Improvements_256.xml
+```
 
 ## Validating mod files
 
