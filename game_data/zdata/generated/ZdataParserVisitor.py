@@ -43,6 +43,11 @@ class ZdataParserVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by ZdataParser#castExpression.
+    def visitCastExpression(self, ctx:ZdataParser.CastExpressionContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by ZdataParser#groupingExpression.
     def visitGroupingExpression(self, ctx:ZdataParser.GroupingExpressionContext):
         return self.visitChildren(ctx)

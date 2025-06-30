@@ -29,6 +29,7 @@ expression:
 	| left = expression op = ('+' | '-') right = expression	# additiveExpression
 	| left = expression '|' right = expression				# unionExpression
 	| Identifier											# variableAccessExpression
+	| '<' Identifier '>' expression							# castExpression
 	| '(' expression ')'									# groupingExpression
 	| base = expression '[' index = expression ']'			# indexingExpression
 	| expression '(' expressionSequence? ')' arrayLiteral?	# functionCallExpression;

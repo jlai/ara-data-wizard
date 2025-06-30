@@ -1,6 +1,9 @@
+import os
 import re
+import sys
 from typing import override
 from antlr4 import FileStream, CommonTokenStream
+from antlr4.error.ErrorListener import ErrorListener
 from collections import OrderedDict
 from .generated.ZdataLexer import ZdataLexer
 from .generated.ZdataParser import ZdataParser
@@ -10,6 +13,8 @@ from .generated.ZdataParserVisitor import ZdataParserVisitor
 Expression to extract a string like @"MODS(stuff)MODS"
 """
 HERE_STRING = re.compile(r'@"(?P<marker>[A-Za-z]+)\((?P<content>.*)\)(?P=marker)"')
+
+NUMBER_SUFFIX = re.compile(r"(uu|u8|i8|i|u)$")
 
 
 class WrappedValue:
@@ -21,9 +26,7 @@ class WrappedValue:
 
 
 def parse_int(s: str):
-    return int(
-        s.removesuffix("uu").removesuffix("u").removesuffix("i8").removesuffix("i")
-    )
+    return int(NUMBER_SUFFIX.sub("", s))
 
 
 def parse_float(s: str):
@@ -31,8 +34,9 @@ def parse_float(s: str):
 
 
 class ParsedZdataFile:
-    def __init__(self, *, exports: dict):
+    def __init__(self, *, exports: dict, schema: str):
         self.exports = exports
+        self.schema = schema
 
 
 class ZdataVisitor(ZdataParserVisitor):
@@ -40,11 +44,12 @@ class ZdataVisitor(ZdataParserVisitor):
         super().__init__()
         self.variables = {}
         self.exports = OrderedDict()
+        self.schema = None
 
     @override
     def visitProgram(self, ctx):
         self.visitChildren(ctx)
-        return ParsedZdataFile(exports=self.exports)
+        return ParsedZdataFile(exports=self.exports, schema=self.schema)
 
     @override
     def visitStatement(self, ctx):
@@ -52,7 +57,7 @@ class ZdataVisitor(ZdataParserVisitor):
 
     @override
     def visitSchemaStatement(self, ctx):
-        return self.visitChildren(ctx)
+        self.schema = ctx.Identifier().getText()
 
     @override
     def visitExportStatement(self, ctx):
@@ -70,6 +75,10 @@ class ZdataVisitor(ZdataParserVisitor):
 
         self.variables[variable_name] = value
         return WrappedValue(value, key=variable_name)
+
+    @override
+    def visitCastExpression(self, ctx):
+        return self.visit(ctx.expression())
 
     @override
     def visitLiteralExpression(self, ctx):
@@ -213,10 +222,27 @@ class ZdataVisitor(ZdataParserVisitor):
         }
 
 
-def parse_zdata_stream(stream) -> ParsedZdataFile:
-    lexer = ZdataLexer(stream)
+class ParseErrorListener(ErrorListener):
+    def __init__(self, filename="<string>"):
+        super().__init__()
+        self.filename = filename
+
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+        print(f"file {self.filename} line {line}:{column:d} {msg}", file=sys.stderr)
+
+
+def parse_zdata_stream(stream, filename=None) -> ParsedZdataFile:
+    error_listener = ParseErrorListener(filename)
+
+    lexer = ZdataLexer(stream, sys.stderr)
     stream = CommonTokenStream(lexer)
-    parser = ZdataParser(stream)
+    parser = ZdataParser(stream, sys.stderr)
+
+    lexer.removeErrorListeners()
+    lexer.addErrorListener(error_listener)
+    parser.removeErrorListeners()
+    parser.addErrorListener(error_listener)
+
     tree = parser.program()
     output = ZdataVisitor().visit(tree)
 
@@ -227,7 +253,9 @@ def parse_zdata_stream(stream) -> ParsedZdataFile:
 
 def parse_zdata_file(path) -> ParsedZdataFile:
     try:
-        output = parse_zdata_stream(FileStream(path))
+        output = parse_zdata_stream(
+            FileStream(path, encoding="utf-8"), filename=os.path.basename(path)
+        )
     except Exception as e:
         raise Exception(f"error parsing file {path}") from e
 
