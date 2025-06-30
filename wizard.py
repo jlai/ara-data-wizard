@@ -1,3 +1,4 @@
+import functools
 from pathlib import PurePath
 import sys
 import click
@@ -25,24 +26,48 @@ def ensure_directory(path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
 
+def asset_dir_option(func):
+    @click.option(
+        "--assets-dir",
+        help="Game assets directory path",
+        required=True,
+        default=config.get("assets-dir"),
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def load_database(func):
+    @asset_dir_option
+    @click.option(
+        "--cache-dir",
+        help="Directory for cached data",
+        default=config.get("cache-dir") or ".cache",
+    )
+    @functools.wraps(func)
+    def wrapper(*args, assets_dir, cache_dir, **kwargs):
+        db = GameDatabase(assets_dir, cache_dir=cache_dir)
+
+        return func(db=db, *args, **kwargs)
+
+    return wrapper
+
+
 @click.group()
 def cli():
     pass
 
 
 @cli.command()
-@click.option(
-    "--assets-dir",
-    help="Game assets directory path",
-    required=True,
-    default=config.get("assets-dir"),
-)
+@load_database
 @click.option(
     "-o", "output_filename", help="Output filename", default="out/Ara Game Data.xlsx"
 )
-def excel(assets_dir=None, output_filename=None):
+def excel(*, output_filename, db):
     """Create a XLSX file with various data from the game."""
-    db = GameDatabase(assets_dir)
 
     ensure_directory(output_filename)
     generate_xlsx(output_filename, db)
@@ -51,12 +76,7 @@ def excel(assets_dir=None, output_filename=None):
 
 
 @cli.command()
-@click.option(
-    "--assets-dir",
-    help="Game assets directory path",
-    required=True,
-    default=config.get("assets-dir"),
-)
+@load_database
 @click.option(
     "-o", "output_filename", help="Output filename", default="out/ara-data.json"
 )
@@ -77,15 +97,14 @@ def excel(assets_dir=None, output_filename=None):
     default=json_config.get("normalize-case", True),
 )
 def json(
-    assets_dir=None,
-    output_filename=None,
-    translate_text=True,
-    remove_properties=[],
-    normalize_case=True,
+    *,
+    output_filename,
+    translate_text,
+    remove_properties,
+    normalize_case,
+    db: GameDatabase,
 ):
     """Create a JSON file with various data from the game."""
-    db = GameDatabase(assets_dir)
-
     options = ExportJsonOptions(
         translate_text=translate_text,
         remove_properties=remove_properties,
@@ -117,7 +136,7 @@ def json(
 @click.option(
     "--exclude", help='Exclude files matching a glob pattern, like "*DLC*"', type=str
 )
-def validate(directory, keep_going=False, include=None, exclude=None, quiet=False):
+def validate(*, directory, keep_going, include, exclude, quiet):
     """Check for syntax errors in mods directory"""
     if not quiet:
         click.echo(f"Scanning from directory: {PurePath(directory)}")
@@ -145,35 +164,27 @@ def validate(directory, keep_going=False, include=None, exclude=None, quiet=Fals
 
 
 @cli.command()
-@click.option(
-    "--assets-dir",
-    help="Game assets directory path",
-    required=True,
-    default=config.get("assets-dir"),
-)
+@load_database
 @click.option(
     "-o", "output_filename", help="Output filename", default="out/Ara Goods.svg"
 )
-def graphviz(assets_dir=None, output_filename=None):
+def graphviz(
+    *,
+    output_filename,
+    db: GameDatabase,
+):
     """Visualize goods dependencies using graphviz"""
-    db = GameDatabase(assets_dir)
-
     ensure_directory(output_filename)
-    export_to_graphviz(output_filename, db, assets_dir=assets_dir)
+    export_to_graphviz(output_filename, db, assets_dir=db.assets_dir)
 
     click.echo(f"Graph written to {output_filename}")
 
 
 @cli.command()
-@click.option(
-    "--assets-dir",
-    help="Game assets directory path",
-    required=True,
-    default=config.get("assets-dir"),
-)
+@asset_dir_option
 @click.argument("image_path")
 @click.option("-o", "output_dir", help="Output directory", default="out/images")
-def images(assets_dir=None, image_path=None, output_dir=None):
+def images(*, assets_dir, image_path, output_dir):
     """Extract images from image atlas"""
     full_path = os.path.join(assets_dir, image_path)
 

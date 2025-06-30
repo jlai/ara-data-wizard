@@ -75,3 +75,10 @@ python wizard.py validate --include Improvements*.zdata
 
 Use `--help` to see more options. Note that currently this only checks the syntax and not
 the schema / data types of your objects.
+
+## Troubleshooting
+
+### Clearing the cache
+
+If you've updated the source code or are having trouble, delete the `.cache` directory
+to clear out cached data.
