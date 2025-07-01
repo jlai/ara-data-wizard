@@ -22,6 +22,8 @@ def parse_modifier_actions(s: str):
     Parse a modifier like:
 
     ModAdd(Aesthetics, 15.00) and ModAdd(Wealth, 15.00) and ModAdd(Education, 15.00) and ModAdd(Health, 15.00) and ModAdd(Happiness, 15.00)
+
+    into [ModifierAction(operation="ModAdd", values=["Wealth", 15.0]), ...]
     """
 
     return [

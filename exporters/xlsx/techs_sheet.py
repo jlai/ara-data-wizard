@@ -78,7 +78,8 @@ class TechsSheetGenerator(SheetGenerator):
                 case "itm":
                     resources.append(desc)
                 case "rcp":
-                    product_id = self.db.get_recipe_product(id)[0]
+                    recipe = self.db.recipes.by.id[id]
+                    product_id = self.db.get_recipe_product(recipe)
                     if product_id.startswith("unt_"):
                         units.append(desc)
                     else:

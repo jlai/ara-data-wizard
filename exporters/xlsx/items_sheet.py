@@ -66,8 +66,8 @@ class ItemsSheetGenerator(SheetGenerator):
         )
 
         construction_projects = sorted(
-            f"{self.get_text(record.construction_name)} ({record.count_needed})"
-            for record in self.db.construction_costs.by.item_id[item.id]
+            f"{self.db.get_name_text(record.output_id, count={record.count_needed})} ({record.count_needed})"
+            for record in self.db.item_costs.by.item_id[item.id]
         )
 
         production_cost = ""

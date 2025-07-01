@@ -3,7 +3,6 @@ import os
 import glob
 from pathlib import PurePath
 import pickle
-from pprint import pp
 import time
 import types
 from warnings import warn
@@ -72,8 +71,10 @@ class GameDatabase:
         self.unlocks.create_index("unlocks_id")
         self.supplies = Table("supplies")
         self.supplies.create_index("item_id")
-        self.construction_costs = Table("construction_costs")
-        self.construction_costs.create_index("item_id")
+        self.item_costs = Table("item_costs")
+        self.item_costs.create_index("item_id")
+        self.crafting_locations = Table("crafting_locations")
+        self.crafting_locations.create_index("item_id")
 
         self.translations = self.load_translations()
 
@@ -92,6 +93,7 @@ class GameDatabase:
         self.city_missile_projects = self.get_object_table("MissileProjectTemplate")
 
         self.setup_eras()
+        self.remove_internal()
         self.build_crossrefs()
 
     def load_all_objects(self):
@@ -205,6 +207,13 @@ class GameDatabase:
 
         return texts
 
+    def remove_internal(self):
+        self.improvements.remove_many(
+            self.improvements.where(
+                id=Table.is_in(["imp_GreatHearth_A2", "imp_GreatHearth_A3"])
+            )
+        )
+
     def build_crossrefs(self):
         for tech in self.techs:
             for unlock in get_tech_unlocks_ids(tech):
@@ -231,14 +240,52 @@ class GameDatabase:
                     }
                 )
 
-            for item_id, count in ensure_dict(
+            for recipe_id in improvement.Recipes:
+                recipe = self.recipes.by.id[recipe_id]
+                item_id = recipe.ItemCreated
+                output_id = self.get_recipe_product(recipe)
+
+                # Unit recipes are not really used right now
+                if output_id.startswith("unt_"):
+                    continue
+
+                self.crafting_locations.insert(
+                    {"item_id": item_id, "improvement_id": improvement.id}
+                )
+
+                for ingredient in recipe.Ingredients:
+                    for input_item_id, quantity in ingredient["Options"].items():
+                        self.item_costs.insert(
+                            {
+                                "type": "recipe",
+                                "output_id": output_id,
+                                "input_item_id": input_item_id,
+                                "input_item_quantity": quantity,
+                            }
+                        )
+
+            for worker_slot in getattr(improvement, "WorkerSlots", []):
+                for input_item_id, quantity in ensure_dict(
+                    worker_slot.get("Maintenance", {})
+                ).items():
+                    self.item_costs.insert(
+                        {
+                            "type": "maintenance",
+                            "output_id": improvement.id,
+                            "input_item_id": input_item_id,
+                            "input_item_quantity": quantity,
+                        }
+                    )
+
+            for input_item_id, quantity in ensure_dict(
                 improvement.BuildImprovementItemCost
             ).items():
-                self.construction_costs.insert(
+                self.item_costs.insert(
                     {
-                        "construction_name": improvement.Name,
-                        "item_id": item_id,
-                        "count_needed": count,
+                        "type": "build",
+                        "output_id": improvement.id,
+                        "input_item_id": input_item_id,
+                        "input_item_quantity": quantity,
                     }
                 )
 
@@ -246,11 +293,13 @@ class GameDatabase:
             unit_item = self.items.by.id[project.UnitItemCreated]
 
             for item_id, count in ensure_dict(project.ItemCost).items():
-                self.construction_costs.insert(
+
+                self.item_costs.insert(
                     {
-                        "construction_name": unit_item.Name,
-                        "item_id": item_id,
-                        "count_needed": count,
+                        "type": "build",
+                        "output_id": unit_item.TargetUnitID,
+                        "input_item_id": item_id,
+                        "input_item_quantity": count,
                     }
                 )
 
@@ -263,6 +312,13 @@ class GameDatabase:
 
         return LocalizedStrings(locale_id, lines)
 
+    def get_era_rank(self, unlock_id: str):
+        era_id = self.get_earliest_era_id(unlock_id)
+        if not era_id:
+            return 0
+        else:
+            return ERA_RANKS[era_id]
+
     def get_earliest_era_id(self, unlock_id: str):
         earliest_unlock = min(
             self.unlocks.by.unlocks_id[unlock_id],
@@ -273,19 +329,17 @@ class GameDatabase:
             return earliest_unlock.era_id
         return ""
 
-    def get_recipe_product(self, recipe_id):
+    def get_recipe_product(self, recipe):
         "Resolve recipe to a normal item or a unit (instead of the pseudo-item for a unit)"
-        recipe = self.recipes.by.id[recipe_id]
         item = self.items.by.id[recipe.ItemCreated]
 
         if getattr(item, "TargetUnitID", None):
-            unit = self.units.by.id[item.TargetUnitID]
-            return (item.TargetUnitID, unit.Name)
+            return item.TargetUnitID
 
-        return (item.id, item.Name)
+        return item.id
 
-    def get_name_text(self, id: str):
-        return self.get_text(self.get_name_key(id))
+    def get_name_text(self, id: str, count=1):
+        return self.get_text(self.get_name_key(id), count=count)
 
     def get_name_key(self, id: str):
         prefix = id.split("_", 1)[0]
@@ -296,7 +350,9 @@ class GameDatabase:
             case "itm":
                 return self.items.by.id[id].Name
             case "rcp":
-                return self.get_recipe_product(id)[1]
+                recipe = self.recipes.by.id[id]
+                output_id = self.get_recipe_product(recipe)
+                return self.get_name_key(output_id)
             case "tch":
                 return self.techs.by.id[id].Name
             case "unt":
