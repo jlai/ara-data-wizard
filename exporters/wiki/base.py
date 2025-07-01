@@ -1,3 +1,4 @@
+from pprint import pp
 import unicodedata
 import mwparserfromhell
 from mwparserfromhell.wikicode import Template
@@ -30,6 +31,34 @@ def fetch_page_code(uri: str):
     return code
 
 
+def fetch_image_list():
+    continue_token = None
+    all_files = dict()
+
+    while True:
+        params = {
+            "action": "query",
+            "list": "allimages",
+            "ailimit": "500",
+            "format": "json",
+        }
+
+        if continue_token:
+            params["aicontinue"] = continue_token
+
+        response = requests.get(f"https://ara.wiki/api.php", params=params).json()
+
+        for file_info in response.get("query", {}).get("allimages", []):
+            all_files[file_info["name"]] = file_info
+
+        continue_token = response.get("continue", {}).get("aicontinue")
+
+        if not continue_token:
+            break
+
+    return all_files
+
+
 def create_anonymous_template(name, *params):
     template = Template(name)
     for i, param in enumerate(params):
@@ -40,6 +69,14 @@ def create_anonymous_template(name, *params):
 class WikiPageUpdater:
     def __init__(self, db: GameDatabase):
         self.db = db
+        self.wiki_images = fetch_image_list()
+
+    def write_code(self, code, *, output_filename="-"):
+        if output_filename == "-":
+            print(code)
+        else:
+            with open(output_filename, "w", encoding="utf-8") as f:
+                f.write(str(code))
 
     def get_item_link_path(self, item, wiki_id):
         return (
@@ -47,6 +84,13 @@ class WikiPageUpdater:
             if item.id in BASIC_RESOURCE_ITEMS
             else f"List_of_Goods#{wiki_id}"
         )
+
+    def get_wiki_icon(self, wiki_id, suffix=None):
+        # Look for icons with "Item" suffix first
+        if suffix and f"{wiki_id}{suffix}.png" in self.wiki_images:
+            return f"{wiki_id}{suffix}.png"
+        else:
+            return f"{wiki_id}.png"
 
     def get_link_template(self, obj_id):
         prefix = obj_id.split("_", 1)[0]
@@ -72,9 +116,6 @@ class WikiPageUpdater:
                 )
 
             case "unt":
-                unit = self.db.units.by.id[obj_id]
-                wiki_id = self.get_wiki_id(unit.AtlasID)
-
                 return create_anonymous_template(
                     "UnitIcon", f"{wiki_id}.png", wiki_id, f"Class{wiki_id}", name
                 )
@@ -85,7 +126,7 @@ class WikiPageUpdater:
                 link = self.get_item_link_path(item, wiki_id)
                 return create_anonymous_template(
                     "ItemIcon",
-                    f"{wiki_id}.png",
+                    self.get_wiki_icon(wiki_id, "Item"),
                     link,
                     f"Class{wiki_id}",
                     name,

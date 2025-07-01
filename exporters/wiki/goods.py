@@ -6,6 +6,8 @@ from exporters.wiki.base import (
 )
 from mwparserfromhell.wikicode import Template
 
+from game_data.eras import ERA_RANKS
+
 GOODS_TEMPLATE_NAME = "GoodsCraft"
 
 
@@ -25,8 +27,9 @@ class GoodsPageUpdater(WikiPageUpdater):
         super().__init__(*args, **kwargs)
         self.items = (
             self.db.items.where(
-                lambda item: "Flags.Craftable" in item.Flags
-                or "Flags.Warhead" in item.Flags
+                lambda item: (
+                    "Flags.Craftable" in item.Flags or "Flags.Warhead" in item.Flags
+                )
                 and "Flags.Weapon" not in item.Flags
             )
             .compute_field("english_name", lambda item: self.db.get_name_text(item.id))
@@ -45,10 +48,12 @@ class GoodsPageUpdater(WikiPageUpdater):
     def create_goods_template(self, item):
         name = item.english_name
 
-        wiki_id = name.replace(" ", "")
+        wiki_id = self.get_wiki_id(name)
 
         template = Template(f"{GOODS_TEMPLATE_NAME}\n")
-        template.add("itemfile", f"{wiki_id}.png\n")  # establish newline convention
+        template.add(
+            "itemfile", f"{self.get_wiki_icon(wiki_id, "Item")}\n"
+        )  # establish newline convention
         template.add("anchorId", wiki_id)
         template.add("itemname", name)
 
@@ -178,53 +183,55 @@ class GoodsPageUpdater(WikiPageUpdater):
 
         return template
 
+    def generate_goods_code(self, *, output_filename):
+        code = ""
+        items_by_era = {}
+
+        for item in self.items:
+            era_id = self.db.get_earliest_era_id(
+                item.RecipeID
+            ) or self.db.get_earliest_era_id(item.id)
+            items_by_era.setdefault(era_id, []).append(item)
+
+        for era in self.db.eras.orderby(lambda era: ERA_RANKS[era.id]):
+            era_name = self.db.get_text(era.nameKey)
+            era_wiki_id = self.get_wiki_id(era_name)
+
+            era_header = Template("GoodsAge")
+            era_header.add(
+                "Age",
+                f"""<div id="{era_wiki_id}" style="display:inline;">[[#{era_name}|{era_name}]]</div>""",
+            )
+
+            if era.id != "RulesTypes.TechEras.AncientEra":
+                code += "|}"
+
+            code += str(era_header) + "\n"
+
+            for item in sorted(
+                items_by_era[era.id],
+                key=lambda item: self.db.get_name_text(item.id),
+            ):
+                code += str(self.create_goods_template(item)) + "\n"
+
+        code = f"<!-- ara-data-wizard: BEGIN GENERATED CONTENT -->\n{code}\n<!-- ara-data-wizard: END GENERATED CONTENT -->"
+
+        self.write_code(code, output_filename=output_filename)
+
     def update_page(self, *, output_filename):
         code = fetch_page_code("List_of_Goods")
 
         template: Template
-        for template in code.filter_templates():
-            if template.name.matches(GOODS_TEMPLATE_NAME):
-                name = (
-                    str(template.get("itemname").value).replace("<br />", " ").strip()
+        for template in code.filter_templates(matches=GOODS_TEMPLATE_NAME):
+            name = str(template.get("itemname").value).replace("<br />", " ").strip()
+
+            item = self.find_item_by_name(name)
+
+            if item:
+                updated = self.create_goods_template(item)
+                template.update(
+                    dict((str(param.name), param.value) for param in updated.params),
+                    preserve_spacing=False,
                 )
 
-                if name == "Heavy Plow":
-                    name = "Heavy Plows"
-
-                if name == "Rubber":
-                    code.remove(template)
-                    continue
-
-                item = self.find_item_by_name(name)
-
-                if item:
-                    updated = self.create_goods_template(item)
-                    template.update(
-                        dict(
-                            (str(param.name), param.value) for param in updated.params
-                        ),
-                        preserve_spacing=False,
-                    )
-
-            if template.name.matches("GoodsHarv") and template.get(
-                "anchorId"
-            ).value.matches("Oil"):
-                code.insert_after(
-                    template,
-                    """
-{{GoodsHarv
-|itemfile=Rubber.png
-|anchorId=Rubber
-|itemname=Rubber
-|fromNode=
-|canAccel=
-|other=
-}}
-""",
-                )
-
-        if output_filename == "-":
-            print(code)
-        else:
-            with open(output_filename, "w", encoding="utf-8") as f:
-                f.write(str(code))
+        self.write_code(code, output_filename=output_filename)
