@@ -1,4 +1,5 @@
 import click
+import os
 
 from exporters.graphviz import export_to_graphviz
 from game_data.images import extract_atlas_images

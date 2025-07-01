@@ -16,22 +16,7 @@ class ExportJsonOptions:
     normalize_case: bool = False
 
 
-def generate_json(output_filename: str, db: GameDatabase, options=ExportJsonOptions()):
-    tables = {
-        "improvements": organize_by_id(db.improvements),
-        "techs": organize_by_id(db.techs),
-        "items": organize_by_id(db.items),
-        "recipes": organize_by_id(db.recipes),
-        "units": organize_by_id(db.units),
-        "formations": organize_by_id(db.formations),
-        "buffs": organize_by_id(db.buffs),
-        "governments": organize_by_id(db.governments),
-        "citySpecialProjects": organize_by_id(db.city_special_projects),
-        "cityUnitProjects": organize_by_id(db.city_unit_projects),
-        "cityMissileProjects": organize_by_id(db.city_missile_projects),
-        "eras": organize_by_id(db.eras),
-    }
-
+def make_serialize(options, db=None):
     def serialize(obj):
         if isinstance(obj, types.SimpleNamespace):
             obj = vars(obj)
@@ -64,8 +49,29 @@ def generate_json(output_filename: str, db: GameDatabase, options=ExportJsonOpti
 
         return obj
 
+    return serialize
+
+
+def generate_json(output_filename: str, db: GameDatabase, options=ExportJsonOptions()):
+    tables = {
+        "improvements": organize_by_id(db.improvements),
+        "techs": organize_by_id(db.techs),
+        "items": organize_by_id(db.items),
+        "recipes": organize_by_id(db.recipes),
+        "units": organize_by_id(db.units),
+        "formations": organize_by_id(db.formations),
+        "buffs": organize_by_id(db.buffs),
+        "governments": organize_by_id(db.governments),
+        "citySpecialProjects": organize_by_id(db.city_special_projects),
+        "cityUnitProjects": organize_by_id(db.city_unit_projects),
+        "cityMissileProjects": organize_by_id(db.city_missile_projects),
+        "eras": organize_by_id(db.eras),
+    }
+
     with open(output_filename, "w") as f:
-        json.dump(transform(tables, pre_func=serialize), f, indent=4)
+        json.dump(
+            transform(tables, pre_func=make_serialize(options, db=db)), f, indent=4
+        )
 
 
 identity = lambda x: x

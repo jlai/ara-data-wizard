@@ -15,5 +15,6 @@ from .base import cli
 from . import export_commands
 from . import validate_commands
 from . import wiki_commands
+from . import query_commands
 
 cli = cli
