@@ -22,3 +22,18 @@ def update(*, page, db, output_filename):
             updater.update_page(output_filename=output_filename)
         case _:
             print(f"Unknown page {page}")
+
+
+@wiki.command()
+@load_database
+@click.argument("page")
+@click.option("-o", "output_filename", help="Output filename", default="-")
+def generate(*, page, db, output_filename):
+    """Output an updated version of an existing wiki page. Changes must be manually applied."""
+
+    match page:
+        case "harvested-goods":
+            updater = GoodsPageUpdater(db)
+            updater.generate_harvested_goods_code(output_filename=output_filename)
+        case _:
+            print(f"Unknown page {page}")

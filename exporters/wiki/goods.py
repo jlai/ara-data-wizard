@@ -183,6 +183,41 @@ class GoodsPageUpdater(WikiPageUpdater):
 
         return template
 
+    def create_harvested_goods_template(self, item):
+        name = self.db.get_text(item.Name)
+
+        wiki_id = self.get_wiki_id(name)
+
+        template = Template(f"GoodsHarv\n")
+        template.add(
+            "itemfile", f"{self.get_wiki_icon(wiki_id, "Item")}\n"
+        )  # establish newline convention
+        template.add("anchorId", wiki_id)
+        template.add("itemname", name)
+
+        template.add(
+            "fromNode",
+            self.get_sorted_links(
+                self.db.item_costs.where(
+                    output_id=item.id, type="harvest"
+                ).all.input_item_id
+            ),
+        )
+        template.add(
+            "canAccel",
+            self.get_sorted_links(
+                self.db.item_costs.where(
+                    input_item_id=item.id, type="recipe"
+                ).all.output_id
+            ),
+        )
+
+        template.add(
+            "unlockedBy", self.get_sorted_links(self.db.get_techs_that_unlock(item.id))
+        )
+
+        return template
+
     def generate_goods_code(self, *, output_filename):
         code = ""
         items_by_era = {}
@@ -213,6 +248,18 @@ class GoodsPageUpdater(WikiPageUpdater):
                 key=lambda item: self.db.get_name_text(item.id),
             ):
                 code += str(self.create_goods_template(item)) + "\n"
+
+        code = f"<!-- ara-data-wizard: BEGIN GENERATED CONTENT -->\n{code}\n<!-- ara-data-wizard: END GENERATED CONTENT -->"
+
+        self.write_code(code, output_filename=output_filename)
+
+    def generate_harvested_goods_code(self, *, output_filename):
+        code = ""
+
+        for item in self.db.items.where(
+            lambda x: "Flags.Resource" in x.Flags and "Flags.Hidden" not in x.Flags
+        ).orderby(lambda x: self.db.get_name_text(x.id)):
+            code += str(self.create_harvested_goods_template(item)) + "\n"
 
         code = f"<!-- ara-data-wizard: BEGIN GENERATED CONTENT -->\n{code}\n<!-- ara-data-wizard: END GENERATED CONTENT -->"
 

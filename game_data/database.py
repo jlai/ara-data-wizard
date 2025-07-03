@@ -91,6 +91,7 @@ class GameDatabase:
         self.city_unit_projects = self.get_object_table("UnitProjectTemplate")
         self.city_special_projects = self.get_object_table("SpecialProjectTemplate")
         self.city_missile_projects = self.get_object_table("MissileProjectTemplate")
+        self.natural_resources = self.get_object_table("NaturalResourceTemplate")
 
         self.setup_eras()
         self.remove_internal()
@@ -213,6 +214,14 @@ class GameDatabase:
                 id=Table.is_in(["imp_GreatHearth_A2", "imp_GreatHearth_A3"])
             )
         )
+        self.natural_resources.remove_many(
+            self.natural_resources.where(
+                lambda nrc: "NaturalResourceFlags.NotSpawnable" in (nrc.Flags or [])
+            )
+        )
+        self.items.remove_many(
+            self.items.where(lambda item: "Flags.HideUnlessDebug" in item.Flags or [])
+        )
 
     def build_crossrefs(self):
         for tech in self.techs:
@@ -303,6 +312,22 @@ class GameDatabase:
                     }
                 )
 
+        for nrc in self.natural_resources:
+            for option in nrc.HarvestOptions:
+                self.item_costs.insert(
+                    {
+                        "type": "harvest",
+                        "output_id": option["Item"],
+                        "input_item_id": nrc.id,
+                        "input_item_quantity": 1,
+                    }
+                )
+
+    def get_techs_that_unlock(self, obj_id):
+        return list(
+            self.unlocks.where(unlocks_id=obj_id).orderby("era_rank").all.tech_id
+        )
+
     def load_translations(self, locale_id="en"):
         lines: dict[str, LocalizedLine] = {}
 
@@ -370,3 +395,5 @@ class GameDatabase:
                 return self.city_special_projects.by.id[id].Name
             case "cmp":
                 return self.city_missile_projects.by.id[id].Name
+            case "nrc":
+                return self.natural_resources.by.id[id].Name

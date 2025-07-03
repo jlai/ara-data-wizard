@@ -92,6 +92,12 @@ class WikiPageUpdater:
         else:
             return f"{wiki_id}.png"
 
+    def get_sorted_links(self, obj_ids):
+        return "".join(
+            str(self.get_link_template(obj_id))
+            for obj_id in sorted(set(obj_ids), key=self.db.get_name_text)
+        )
+
     def get_link_template(self, obj_id):
         prefix = obj_id.split("_", 1)[0]
         name = self.get_wiki_name(self.db.get_name_text(obj_id))
@@ -132,6 +138,15 @@ class WikiPageUpdater:
                     name,
                 )
 
+            case "nrc":
+                return create_anonymous_template(
+                    "ItemIcon",
+                    self.get_wiki_icon(wiki_id, "Item"),
+                    f"List_of_Resource_Nodes#{wiki_id}",
+                    f"Class{wiki_id}",
+                    name,
+                )
+
             case _:
                 raise Exception(f"Unknown object type: {obj_id}")
 
@@ -144,6 +159,8 @@ class WikiPageUpdater:
                 return "HimejiJo"
             case "CRISPR":
                 return "Crispr"
+            case "White-tailed Deer":
+                return "WhiteTailedDeer"
 
             case _:
                 name = (
