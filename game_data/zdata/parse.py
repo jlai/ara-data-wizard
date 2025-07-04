@@ -203,6 +203,8 @@ class ZdataVisitor(ZdataParserVisitor):
 
     @override
     def visitFunctionCallExpression(self, ctx):
+        name = ctx.expression().getText()
+
         args = []
         if ctx.expressionSequence():
             args.extend(
@@ -215,9 +217,15 @@ class ZdataVisitor(ZdataParserVisitor):
         if ctx.arrayLiteral():
             args.append(self.visit(ctx.arrayLiteral()))
 
+        match name:
+            case "int" | "float":
+                return args[0]
+            case "int2" | "float2":
+                return args
+
         return {
             "_type": "functionCall",
-            "name": ctx.expression().getText(),
+            "name": name,
             "args": args,
         }
 

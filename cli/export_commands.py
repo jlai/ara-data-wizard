@@ -1,3 +1,4 @@
+import functools
 import click
 import os
 
@@ -5,7 +6,7 @@ from exporters.graphviz import export_to_graphviz
 from game_data.images import extract_atlas_images
 from cli.config import json_config
 from cli.base import asset_dir_option, cli, ensure_directory, load_database
-from exporters.json import ExportJsonOptions, generate_json
+from exporters.json import ExportJsonOptions, JsonFilter, generate_json
 from exporters.xlsx import generate_xlsx
 from game_data.database import GameDatabase
 
@@ -24,28 +25,42 @@ def excel(*, output_filename, db):
     click.echo(f"Spreadsheet written to {output_filename}")
 
 
-@cli.command()
+@cli.group
+def json():
+    pass
+
+
+def json_options(func):
+    @click.option(
+        "-o", "output_filename", help="Output filename", default="out/ara-data.json"
+    )
+    @click.option(
+        "--translate-text",
+        help="Convert fields with text keys into localized strings (English)",
+        default=json_config.get("translate-text", False),
+    )
+    @click.option(
+        "--remove-properties",
+        help="Property names to remove from all objects",
+        default=json_config.get("remove-properties", []),
+        type=list[str],
+    )
+    @click.option(
+        "--normalize-case",
+        help="Ensure that properties start with a lower case letter",
+        default=json_config.get("normalize-case", True),
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+@json.command()
 @load_database
-@click.option(
-    "-o", "output_filename", help="Output filename", default="out/ara-data.json"
-)
-@click.option(
-    "--translate-text",
-    help="Convert fields with text keys into localized strings (English)",
-    default=json_config.get("translate-text", False),
-)
-@click.option(
-    "--remove-properties",
-    help="Property names to remove from all objects",
-    default=json_config.get("remove-properties", []),
-    type=list[str],
-)
-@click.option(
-    "--normalize-case",
-    help="Ensure that properties start with a lower case letter",
-    default=json_config.get("normalize-case", True),
-)
-def json(
+@json_options
+def objects(
     *,
     output_filename,
     translate_text,
@@ -53,11 +68,12 @@ def json(
     normalize_case,
     db: GameDatabase,
 ):
-    """Create a JSON file with various data from the game."""
+    """Create a JSON file with all the objects indexed by id."""
     options = ExportJsonOptions(
         translate_text=translate_text,
         remove_properties=remove_properties,
         normalize_case=normalize_case,
+        filters=[JsonFilter.from_json(rule) for rule in json_config.get("filters", [])],
     )
 
     ensure_directory(output_filename)

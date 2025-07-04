@@ -1,12 +1,48 @@
 from dataclasses import dataclass, field
 import json
 import types
-from littletable import Table
-from game_data.database import GameDatabase
+from game_data.database import GameDatabase, ensure_dict
 
 
-def organize_by_id(table: Table):
-    return dict((entry.id, entry) for entry in table)
+def organize_by_id(objects):
+    return dict((entry["id"], entry) for entry in objects)
+
+
+@dataclass(kw_only=True)
+class JsonFilter:
+    type: str | list[str] = None
+    schema: str | list[str] = None
+    exclude: bool = False
+    remove_properties: list[str] = field(default_factory=list)
+
+    @staticmethod
+    def from_json(json_obj):
+        return JsonFilter(
+            type=json_obj.get("type", None),
+            schema=json_obj.get("schema", None),
+            exclude=json_obj.get("exclude", False),
+            remove_properties=json_obj.get("remove-properties", False),
+        )
+
+    def map_object(self, obj):
+        obj = ensure_dict(obj)
+
+        if not match_filter_property(obj.get("_type", None), self.type):
+            return obj
+        if not match_filter_property(obj.get("_schema", None), self.schema):
+            return obj
+
+        if self.remove_properties:
+            obj = dict(
+                (key, value)
+                for (key, value) in obj.items()
+                if key not in self.remove_properties
+            )
+
+        if self.exclude:
+            return None
+
+        return obj
 
 
 @dataclass(kw_only=True)
@@ -14,6 +50,20 @@ class ExportJsonOptions:
     translate_text: bool = False
     remove_properties: list[str] = field(default_factory=list)
     normalize_case: bool = False
+    filters: list[JsonFilter] = field(default_factory=list)
+
+
+def match_filter_property(value, rule_value):
+    if not value:
+        return False
+
+    if not rule_value:
+        return True
+
+    if isinstance(rule_value, list):
+        return value in rule_value
+    else:
+        return value == rule_value
 
 
 def make_serialize(options, db=None):
@@ -28,10 +78,21 @@ def make_serialize(options, db=None):
             updates = {}
 
             if options.remove_properties:
+                props_to_remove = []
+                obj_type = getattr(obj, "_type", None)
+
+                for prop in options.remove_properties:
+                    if ":" in prop:
+                        prefix, prop = prop.split(":", 1)
+                        if prefix != obj_type:
+                            continue
+
+                    props_to_remove.append(prop)
+
                 obj = dict(
                     (key, value)
                     for (key, value) in obj.items()
-                    if key not in options.remove_properties
+                    if key not in props_to_remove
                 )
 
             if options.normalize_case:
@@ -52,25 +113,32 @@ def make_serialize(options, db=None):
     return serialize
 
 
+def match_filter_property(value, rule_value):
+    if not value:
+        return False
+
+    if not rule_value:
+        return True
+
+    if isinstance(rule_value, list):
+        return value in rule_value
+    else:
+        return value == rule_value
+
+
 def generate_json(output_filename: str, db: GameDatabase, options=ExportJsonOptions()):
-    tables = {
-        "improvements": organize_by_id(db.improvements),
-        "techs": organize_by_id(db.techs),
-        "items": organize_by_id(db.items),
-        "recipes": organize_by_id(db.recipes),
-        "units": organize_by_id(db.units),
-        "formations": organize_by_id(db.formations),
-        "buffs": organize_by_id(db.buffs),
-        "governments": organize_by_id(db.governments),
-        "citySpecialProjects": organize_by_id(db.city_special_projects),
-        "cityUnitProjects": organize_by_id(db.city_unit_projects),
-        "cityMissileProjects": organize_by_id(db.city_missile_projects),
-        "eras": organize_by_id(db.eras),
-    }
+    def map_obj(obj):
+        for rule in options.filters:
+            obj = rule.map_object(obj)
+        return obj
+
+    objects = filter(None, (map_obj(obj) for obj in db.all_objects))
 
     with open(output_filename, "w") as f:
         json.dump(
-            transform(tables, pre_func=make_serialize(options, db=db)), f, indent=4
+            transform(organize_by_id(objects), pre_func=make_serialize(options, db=db)),
+            f,
+            indent=4,
         )
 
 

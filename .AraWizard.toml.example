@@ -2,4 +2,22 @@ assets-dir = 'C:\Program Files (x86)\Steam\steamapps\common\Ara History Untold\a
 
 [json]
 translate-text = true
-remove-properties = ["EncartaStrategy", "EncartaHistory"]
+
+[[json.filters]]
+remove-properties = ["EncartaStrategy", "EncartaHistory", "SearchTags"]
+
+[[json.filters]]
+schema = ["NationAI", "NewGameConfig", "Paragons"]
+exclude = true
+
+[[json.filters]]
+type = ["ParagonTemplate"]
+exclude = true
+
+[[json.filters]]
+schema = "NationTemplate"
+remove-properties = ["RegionNames"]
+
+[[json.filters]]
+schema = "GameplayMap"
+exclude = true
