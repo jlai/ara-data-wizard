@@ -28,6 +28,11 @@ def ensure_dict(obj):
     return obj
 
 
+def has_flag(obj, flag, flag_key="Flags"):
+    flags = getattr(obj, flag_key, []) or []
+    return flag in flags
+
+
 def get_tech_unlocks_ids(tech):
     return (
         getattr(tech, "UnlockImprovementsIDs", [])
@@ -46,6 +51,10 @@ def get_tech_obsoletes_ids(tech):
         + getattr(tech, "ObsoleteCityUnitProjectIDs", [])
         + getattr(tech, "ObsoleteRecipes", [])
     )
+
+
+def is_improvement_a_triumph(improvement):
+    return has_flag(improvement, "GrantedFlag.Triumph", flag_key="GrantedFlags")
 
 
 def glob_assets(assets_dir, include, exclude="*DLC*"):
@@ -67,6 +76,7 @@ class GameDatabase:
 
         self.eras = Table("eras")
         self.eras.create_index("id", unique=True)
+        self.eras.compute_field("rank", lambda era: ERA_RANKS[era.id])
         self.unlocks = Table("unlocks")
         self.unlocks.create_index("unlocks_id")
         self.supplies = Table("supplies")
@@ -220,7 +230,10 @@ class GameDatabase:
             )
         )
         self.items.remove_many(
-            self.items.where(lambda item: "Flags.HideUnlessDebug" in item.Flags or [])
+            self.items.where(
+                lambda item: item.id != "itm_Money"
+                and ("Flags.HideUnlessDebug" in (item.Flags or []))
+            )
         )
 
     def build_crossrefs(self):

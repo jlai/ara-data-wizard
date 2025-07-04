@@ -92,16 +92,20 @@ class WikiPageUpdater:
         else:
             return f"{wiki_id}.png"
 
-    def get_sorted_links(self, obj_ids):
+    def get_sorted_links(self, obj_ids, extra_css_class=""):
         return "".join(
-            str(self.get_link_template(obj_id))
+            str(self.get_link_template(obj_id, extra_css_class=extra_css_class))
             for obj_id in sorted(set(obj_ids), key=self.db.get_name_text)
         )
 
-    def get_link_template(self, obj_id):
+    def get_link_template(self, obj_id, extra_css_class=""):
         prefix = obj_id.split("_", 1)[0]
         name = self.get_wiki_name(self.db.get_name_text(obj_id))
         wiki_id = self.get_wiki_id(name)
+        css_class = f"Class{wiki_id}"
+
+        if extra_css_class:
+            css_class += f" {extra_css_class}"
 
         match prefix:
             case "imp":
@@ -112,18 +116,18 @@ class WikiPageUpdater:
                     "TriuIcon" if is_triumph else "ImpIcon",
                     f"{wiki_id}.png",
                     wiki_id,
-                    f"Class{wiki_id}",
+                    css_class,
                     name,
                 )
 
             case "tch":
                 return create_anonymous_template(
-                    "Tech", f"{wiki_id}.png", f"Class{wiki_id}", name
+                    "Tech", f"{wiki_id}.png", css_class, name
                 )
 
             case "unt":
                 return create_anonymous_template(
-                    "UnitIcon", f"{wiki_id}.png", wiki_id, f"Class{wiki_id}", name
+                    "UnitIcon", f"{wiki_id}.png", wiki_id, css_class, name
                 )
 
             case "itm":
@@ -134,7 +138,7 @@ class WikiPageUpdater:
                     "ItemIcon",
                     self.get_wiki_icon(wiki_id, "Item"),
                     link,
-                    f"Class{wiki_id}",
+                    css_class,
                     name,
                 )
 
@@ -143,9 +147,34 @@ class WikiPageUpdater:
                     "ItemIcon",
                     self.get_wiki_icon(wiki_id, "Item"),
                     f"List_of_Resource_Nodes#{wiki_id}",
-                    f"Class{wiki_id}",
+                    css_class,
                     name,
                 )
+
+            case "rcp":
+                recipe = self.db.recipes.by.id[obj_id]
+                product_id = self.db.get_recipe_product(recipe)
+
+                return self.get_link_template(
+                    product_id, extra_css_class=extra_css_class
+                )
+
+            case "cup":
+                project = self.db.city_unit_projects.by.id[obj_id]
+                item = self.db.items.by.id[project.UnitItemCreated]
+
+                return self.get_link_template(
+                    item.TargetUnitID, extra_css_class=extra_css_class
+                )
+
+            case "gvt":
+                return f"<div>[[List_of_Government_Types#{wiki_id}|{name}]]</div>"
+
+            case "frm":
+                return f"<div>[[Combat#{wiki_id}|{name}]]</div>"
+
+            case "csp" | "cmp":
+                return f"<div>City project: {name}</div>"
 
             case _:
                 raise Exception(f"Unknown object type: {obj_id}")
@@ -186,3 +215,16 @@ class WikiPageUpdater:
             text = text.replace(term, replacement)
 
         return text
+
+    def describe_item_costs(self, item_costs: dict, production_cost=None):
+        descs = []
+
+        if production_cost:
+            descs.append(f"<div>{production_cost} {{{{ProdIcon}}}}</div>")
+
+        for item_id, quantity in sorted(item_costs.items(), key=lambda x: x[1]):
+            descs.append(
+                f"<div>{quantity}x {str(self.get_link_template(item_id))}</div>"
+            )
+
+        return " ".join(descs)
