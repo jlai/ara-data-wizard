@@ -44,10 +44,14 @@ python wizard.py graphviz -o "out/Ara Goods.pdf"
 To dump a .json file:
 
 ```bash
-python wizard.py json object -o out/ara.json
+python wizard.py json dump -o out/ara.json
 ```
 
-You can then query the file with a tool like [jq](https://jqlang.org/tutorial/).
+You can then query the file with a tool like [jq](https://jqlang.org/tutorial/), for example:
+
+```bash
+jq ".improvements | map_values(pick(.name,.uiProductionCost))" out/ara-data.json
+```
 
 ## Extracting images
 
