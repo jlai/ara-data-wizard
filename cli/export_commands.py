@@ -35,15 +35,14 @@ def json_options(func):
         "-o", "output_filename", help="Output filename", default="out/ara-data.json"
     )
     @click.option(
+        "--groups",
+        help="List of GameCoreData groups to include",
+        default=json_config.get("groups", None),
+    )
+    @click.option(
         "--translate-text",
         help="Convert fields with text keys into localized strings (English)",
         default=json_config.get("translate-text", False),
-    )
-    @click.option(
-        "--remove-properties",
-        help="Property names to remove from all objects",
-        default=json_config.get("remove-properties", []),
-        type=list[str],
     )
     @click.option(
         "--normalize-case",
@@ -60,18 +59,18 @@ def json_options(func):
 @json.command()
 @load_database
 @json_options
-def objects(
+def dump(
     *,
     output_filename,
     translate_text,
-    remove_properties,
     normalize_case,
+    groups,
     db: GameDatabase,
 ):
-    """Create a JSON file with all the objects indexed by id."""
+    """Dump the game data as a JSON file"""
     options = ExportJsonOptions(
+        groups=groups,
         translate_text=translate_text,
-        remove_properties=remove_properties,
         normalize_case=normalize_case,
         filters=[JsonFilter.from_json(rule) for rule in json_config.get("filters", [])],
     )

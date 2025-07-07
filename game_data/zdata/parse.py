@@ -220,7 +220,7 @@ class ZdataVisitor(ZdataParserVisitor):
         match name:
             case "int" | "float":
                 return args[0]
-            case "int2" | "float2":
+            case "int2" | "float2" | "uint2" | "uint4":
                 return args
 
         return {

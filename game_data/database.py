@@ -1,12 +1,14 @@
 from itertools import chain
 import os
 import glob
-from pathlib import PurePath
 import pickle
 import time
 import types
 from warnings import warn
 from littletable import Table
+
+from game_data.zdata.utils import ensure_dict, has_flag
+from game_data.zdata.game_core_data import GameCoreDataLoader
 from .eras import ERA_RANKS
 
 from game_data.translations import (
@@ -14,23 +16,6 @@ from game_data.translations import (
     LocalizedStrings,
     parse_translation_file,
 )
-
-from .zdata.parse import parse_zdata_file
-
-
-def ensure_dict(obj):
-    if isinstance(obj, types.SimpleNamespace):
-        return vars(obj)
-    elif isinstance(obj, list):
-        return dict([(x, 1) for x in obj])
-    elif obj is None:
-        return {}
-    return obj
-
-
-def has_flag(obj, flag, flag_key="Flags"):
-    flags = getattr(obj, flag_key, []) or []
-    return flag in flags
 
 
 def get_tech_unlocks_ids(tech):
@@ -57,14 +42,8 @@ def is_improvement_a_triumph(improvement):
     return has_flag(improvement, "GrantedFlag.Triumph", flag_key="GrantedFlags")
 
 
-def glob_assets(assets_dir, include, exclude="*DLC*"):
-    matches = glob.glob(include, root_dir=assets_dir, recursive=True)
-
-    return [path for path in matches if not PurePath(path).match(exclude)]
-
-
 class GameDatabase:
-    CACHE_VERSION = 1
+    CACHE_VERSION = 2
 
     def __init__(self, assets_dir, *, cache_dir):
         if not os.path.exists(assets_dir):
@@ -88,50 +67,58 @@ class GameDatabase:
 
         self.translations = self.load_translations()
 
-        self.all_objects = self.load_all_objects()
-
-        self.improvements = self.get_object_table("ImprovementTemplate")
-        self.techs = self.get_object_table("TechnologyTemplate")
-        self.items = self.get_object_table("ItemTemplate")
-        self.buffs = self.get_object_table("BuffTemplateData")
-        self.recipes = self.get_object_table("RecipeTemplate")
-        self.units = self.get_object_table("UnitTemplate")
-        self.formations = self.get_object_table("ArmyTemplate")
-        self.governments = self.get_object_table("Government")
-        self.city_unit_projects = self.get_object_table("UnitProjectTemplate")
-        self.city_special_projects = self.get_object_table("SpecialProjectTemplate")
-        self.city_missile_projects = self.get_object_table("MissileProjectTemplate")
-        self.natural_resources = self.get_object_table("NaturalResourceTemplate")
+        self.game_data = self.strip_DLCs(self.load_game_data())
+        self.all_objects = self.setup_all_objects_table()
+        self.improvements = self.get_object_table("Improvements")
+        self.techs = self.get_object_table("Technologies")
+        self.items = self.get_object_table("ItemTemplates")
+        self.buffs = self.get_object_table("BuffTemplates")
+        self.recipes = self.get_object_table("Recipes")
+        self.units = self.get_object_table("UnitTemplates")
+        self.formations = self.get_object_table("ArmyTemplates")
+        self.governments = self.get_object_table("Governments")
+        self.city_unit_projects = self.get_object_table("CityUnitProjects")
+        self.city_special_projects = self.get_object_table("CitySpecialProjects")
+        self.city_missile_projects = self.get_object_table("CityMissileProjects")
+        self.natural_resources = self.get_object_table("NaturalResourceTemplates")
 
         self.setup_eras()
         self.remove_internal()
         self.build_crossrefs()
 
-    def load_all_objects(self):
-        all_objects = Table("all_objects")
-        all_objects.create_index("_schema")
-        all_objects.create_index("_type")
+    def load_game_data(self):
+        core_zdata_path = os.path.join(self.assets_dir, "SourceMods/GameCoreData.zdata")
+        loader = GameCoreDataLoader(core_zdata_path)
 
-        if self.load_from_cache(all_objects):
-            return all_objects
+        cached_data = self.load_from_cache(loader)
+        if cached_data:
+            return cached_data
 
-        self.load_from_source(all_objects)
+        print(f"Loading game data")
+
+        start_time = time.perf_counter()
+        game_data = loader.load()
+
+        print(
+            f"Loaded game data from {loader.num_files_loaded} files in {(time.perf_counter() - start_time):.1f} seconds"
+        )
 
         # Write cache
         os.makedirs(self.cache_dir, exist_ok=True)
         with open(self.db_cache_path, "wb") as f:
-            pickle.dump(
-                {"version": self.CACHE_VERSION, "objects": list(all_objects)}, f
-            )
+            pickle.dump({"version": self.CACHE_VERSION, "game_data": game_data}, f)
 
-        return all_objects
+        return game_data
 
-    def load_from_cache(self, all_objects: Table):
+    def load_from_cache(self, loader: GameCoreDataLoader):
         start_time = time.perf_counter()
+
         if os.path.exists(self.db_cache_path):
+            source_files = loader.get_zdata_paths()
+
             source_mtime = max(
                 os.stat(os.path.join(self.assets_dir, path)).st_mtime
-                for path in glob_assets(self.assets_dir, "SourceMods/**/*.zdata")
+                for path in source_files
             )
             cache_mtime = os.stat(self.db_cache_path).st_mtime
 
@@ -147,51 +134,56 @@ class GameDatabase:
                         print("Cache version out of date; discarding")
                         return False
 
-                    for obj in pickled_data["objects"]:
-                        all_objects.insert(obj)
-
                     print(
                         f"Loaded from cache in {(time.perf_counter() - start_time):.1f} seconds"
                     )
 
-                    return True
+                    return pickled_data["game_data"]
 
             except Exception as e:
                 print(f"Error loading from cache", e)
 
-        return False
+        return None
 
-    def load_from_source(self, all_objects: Table):
-        start_time = time.perf_counter()
-        num_files = 0
+    def strip_DLCs(self, game_data):
+        updated_game_data = {}
 
-        zdata_path = os.path.join(self.assets_dir, "SourceMods")
+        for group_key, group_entries in game_data.items():
+            updated_group_entries = dict(
+                (key, value)
+                for key, value in group_entries.items()
+                if not value.get("_core", None)
+            )
+            updated_game_data[group_key] = updated_group_entries
 
-        for path in glob_assets(zdata_path, "**/*.zdata"):
-            num_files += 1
-            zdata = parse_zdata_file(os.path.join(zdata_path, path))
+        return updated_game_data
 
-            for key, value in zdata.exports.items():
-                if isinstance(value, dict):
-                    all_objects.insert(
-                        types.SimpleNamespace(
-                            {"id": key, "_schema": zdata.schema, "_path": path, **value}
-                        )
-                    )
+    def setup_all_objects_table(self):
+        all_objects = Table("all_objects")
+        all_objects.create_index("_schema")
+        all_objects.create_index("_type")
 
-        print(
-            f"Loaded from {num_files} files in {(time.perf_counter() - start_time):.1f} seconds"
-        )
+        for group_entries in self.game_data.values():
+            for key, obj in group_entries.items():
+                all_objects.insert(types.SimpleNamespace({"id": key, **obj}))
 
-    def get_object_table(self, type: str):
-        return self.all_objects.where(_type=type).create_index("id", True)
+        return all_objects
+
+    def get_object_table(self, group_key: str):
+        table = Table(group_key)
+        table.create_index("id", True)
+
+        for key, obj in self.game_data[group_key].items():
+            table.insert(types.SimpleNamespace({"id": key, **obj}))
+
+        return table
 
     def setup_eras(self):
-        rules = self.all_objects.where(_type="BaseGameRulesDef").where(id="Root")[0]
+        rules = self.game_data["GameRules"]["BaseGameRules"]
 
-        for era_id, data in rules.TechEraData.items():
+        for era_id, data in rules["TechEraData"].items():
             if era_id != "RulesTypes.TechEras.NumTechEras":
-                self.eras.insert({"id": era_id, **data})
+                self.eras.insert({"id": era_id, "rank": ERA_RANKS[era_id], **data})
 
     def get_text(self, key, *, count=1, params={}, quiet=False):
         line = self.translations.lines.get(key)

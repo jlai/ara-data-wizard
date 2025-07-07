@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 import json
 import types
-from game_data.database import GameDatabase, ensure_dict
+from game_data.database import GameDatabase
+from game_data.zdata.utils import ensure_dict
 
 
 def organize_by_id(objects):
@@ -11,7 +12,6 @@ def organize_by_id(objects):
 @dataclass(kw_only=True)
 class JsonFilter:
     type: str | list[str] = None
-    schema: str | list[str] = None
     exclude: bool = False
     remove_properties: list[str] = field(default_factory=list)
 
@@ -19,17 +19,14 @@ class JsonFilter:
     def from_json(json_obj):
         return JsonFilter(
             type=json_obj.get("type", None),
-            schema=json_obj.get("schema", None),
             exclude=json_obj.get("exclude", False),
             remove_properties=json_obj.get("remove-properties", False),
         )
 
-    def map_object(self, obj):
+    def update_object(self, obj):
         obj = ensure_dict(obj)
 
         if not match_filter_property(obj.get("_type", None), self.type):
-            return obj
-        if not match_filter_property(obj.get("_schema", None), self.schema):
             return obj
 
         if self.remove_properties:
@@ -47,9 +44,9 @@ class JsonFilter:
 
 @dataclass(kw_only=True)
 class ExportJsonOptions:
+    groups: list[str] = field(default_factory=list)
     translate_text: bool = False
-    remove_properties: list[str] = field(default_factory=list)
-    normalize_case: bool = False
+    normalize_case: bool = True
     filters: list[JsonFilter] = field(default_factory=list)
 
 
@@ -75,26 +72,6 @@ def make_serialize(options, db=None):
             obj = db.get_text(obj, quiet=True)
 
         if isinstance(obj, dict):
-            updates = {}
-
-            if options.remove_properties:
-                props_to_remove = []
-                obj_type = getattr(obj, "_type", None)
-
-                for prop in options.remove_properties:
-                    if ":" in prop:
-                        prefix, prop = prop.split(":", 1)
-                        if prefix != obj_type:
-                            continue
-
-                    props_to_remove.append(prop)
-
-                obj = dict(
-                    (key, value)
-                    for (key, value) in obj.items()
-                    if key not in props_to_remove
-                )
-
             if options.normalize_case:
                 obj = dict(
                     (
@@ -104,9 +81,6 @@ def make_serialize(options, db=None):
                     )
                     for (key, value) in obj.items()
                 )
-
-            if updates:
-                obj = obj | updates
 
         return obj
 
@@ -127,16 +101,27 @@ def match_filter_property(value, rule_value):
 
 
 def generate_json(output_filename: str, db: GameDatabase, options=ExportJsonOptions()):
-    def map_obj(obj):
-        for rule in options.filters:
-            obj = rule.map_object(obj)
-        return obj
+    filtered_game_data = {}
+    for group_name, entries in db.game_data.items():
 
-    objects = filter(None, (map_obj(obj) for obj in db.all_objects))
+        if options.groups and group_name not in options.groups:
+            continue
+
+        filtered_entries = {}
+        for key, entry in entries.items():
+            updated_obj = entry
+
+            for obj_filter in options.filters:
+                updated_obj = obj_filter.update_object(updated_obj)
+                if not updated_obj:
+                    break
+            if updated_obj:
+                filtered_entries[key] = updated_obj
+        filtered_game_data[group_name] = filtered_entries
 
     with open(output_filename, "w") as f:
         json.dump(
-            transform(organize_by_id(objects), pre_func=make_serialize(options, db=db)),
+            transform(filtered_game_data, pre_func=make_serialize(options, db=db)),
             f,
             indent=4,
         )

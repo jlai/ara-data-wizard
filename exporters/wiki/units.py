@@ -46,9 +46,9 @@ class UnitsPageUpdater(WikiPageUpdater):
         self.city_unit_projects = self.db.city_unit_projects.create_index(
             "UnitItemCreated", unique=True
         )
-        self.army_game_rules = self.db.all_objects.where(
-            _type="ArmyGameRulesDef"
-        ).where(id="Root")[0]
+        self.army_game_rules = self.db.get_object_table("GameRules").by.id[
+            "ArmyGameRules"
+        ]
         self.damage_types_strings = self.army_game_rules.DamageTypesStrings
 
     def create_unit_template(self, unit):

@@ -25,11 +25,7 @@ class ReligiousVersesUpdater(WikiPageUpdater):
         """
         )
 
-        for verse in self.db.all_objects.by._type["ReligionBuffTemplate"]:
-            # FIXME currently not included
-            if verse.id == "vrs_Culture6":
-                continue
-
+        for verse in self.db.get_object_table("ReligionBuffs"):
             code += "|-\n"
             code += "| " + self.get_domain_link(verse.Domain) + "\n"
             code += "| " + self.db.get_text(verse.Name) + "\n"
