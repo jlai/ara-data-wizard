@@ -2,6 +2,7 @@ import click
 
 from cli.base import cli, load_database
 from exporters.wiki.goods import GoodsPageUpdater
+from exporters.wiki.religion import ReligiousVersesUpdater
 from exporters.wiki.techs import TechsPageUpdater
 from exporters.wiki.units import UnitsPageUpdater
 
@@ -43,5 +44,8 @@ def generate(*, page, db, output_filename):
         case "harvested-goods":
             updater = GoodsPageUpdater(db)
             updater.generate_harvested_goods_code(output_filename=output_filename)
+        case "verses":
+            updater = ReligiousVersesUpdater(db)
+            updater.write(output_filename=output_filename)
         case _:
             print(f"Unknown page {page}")

@@ -24,6 +24,17 @@ BUFF_LINK_TERMS = {
 
 BASIC_RESOURCE_ITEMS = set(("itm_Money", "itm_Food", "itm_Stone", "itm_Wood"))
 
+DOMAIN_NAMES = {
+    "RulesTypes.Domain.Military": "Military",
+    "RulesTypes.Domain.Commerce": "Commerce",
+    "RulesTypes.Domain.Government": "Government",
+    "RulesTypes.Domain.Religion": "Religion",
+    "RulesTypes.Domain.Culture": "Culture",
+    "RulesTypes.Domain.Science": "Science",
+    "RulesTypes.Domain.Industry": "Industry",
+    "RulesTypes.Domain.Impact": "Impact",
+}
+
 
 def fetch_page_code(uri: str):
     wikitext = requests.get(f"https://ara.wiki/{uri}?action=raw").text
@@ -97,6 +108,10 @@ class WikiPageUpdater:
             str(self.get_link_template(obj_id, extra_css_class=extra_css_class))
             for obj_id in sorted(set(obj_ids), key=self.db.get_name_text)
         )
+
+    def get_domain_link(self, domain_id):
+        name = DOMAIN_NAMES[domain_id]
+        return "{{" + f"Domain{name}" + "}}"
 
     def get_link_template(self, obj_id, extra_css_class=""):
         prefix = obj_id.split("_", 1)[0]
