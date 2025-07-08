@@ -4,6 +4,11 @@ from exporters.wiki.base import (
 from mwparserfromhell.wikicode import Template
 
 from game_data.database import get_tech_obsoletes_ids, is_improvement_a_triumph
+from game_data.zdata.utils import has_flag
+
+
+def is_transition_tech(tech):
+    return has_flag(tech, "TechFlags.CapstoneTech")
 
 
 class TechsPageUpdater(WikiPageUpdater):
@@ -69,17 +74,23 @@ class TechsPageUpdater(WikiPageUpdater):
 
         special = []
 
+        if is_transition_tech(tech):
+            special.append("<div>Age transition</div>")
+
         for id in government_ids + special_ids:
             special.append(self.get_link_template(id))
 
         for buff_id in tech.GrantBuffs:
-            special.append(self.describe_buff(buff_id))
+            special.append(f"<div>{self.describe_buff(buff_id)}</div>")
 
         template.add("Special", "<hr />".join(special))
         template.add(
             "Obsoletes",
             self.get_sorted_links(get_tech_obsoletes_ids(tech), "obsolete"),
         )
+
+        if is_transition_tech(tech):
+            template.add("ExtraClasses", "age-transition")
 
         return template
 
@@ -108,7 +119,10 @@ class TechsPageUpdater(WikiPageUpdater):
 
             for tech in sorted(
                 techs_by_era[era.id],
-                key=lambda item: self.db.get_name_text(item.id),
+                key=lambda tech: (
+                    1 if is_transition_tech(tech) else 0,
+                    self.db.get_name_text(tech.id),
+                ),
             ):
                 code += str(self.create_tech_template(tech)) + "\n"
 
