@@ -55,7 +55,7 @@ class ImprovementsSheetGenerator(SheetGenerator):
         item = self.db.items.by.id[recipe.ItemCreated]
         return self.get_text(item.Name, count="other")
 
-    def get_crafting_outputs(self, improvement):
+    def get_crafting_outputs(self, improvement: Improvement):
         outputs = []
 
         for recipe in improvement.recipes:
@@ -63,7 +63,7 @@ class ImprovementsSheetGenerator(SheetGenerator):
 
         return outputs
 
-    def get_crafting_inputs(self, improvement):
+    def get_crafting_inputs(self, improvement: Improvement):
         inputs = set()
 
         for recipe in improvement.recipes:
@@ -73,22 +73,16 @@ class ImprovementsSheetGenerator(SheetGenerator):
                         continue
 
                     item = self.db.items.by.id[item_id]
-                    name = self.get_text(item.name, count="other")
+                    name = item.get_name(count="other")
                     inputs.add(name)
 
         return list(inputs)
 
-    def get_supply_options(self, improvement):
-        slots = improvement.get("ItemOptions")
+    def get_supply_options(self, improvement: Improvement):
         slot_descs = []
 
-        for slot in slots:
-            options = slot["Options"].keys()
-            slot_descs.append(
-                " / ".join(
-                    self.db.items.by.id[item_id].get_name() for item_id in options
-                )
-            )
+        for slot in improvement.supply_slots:
+            slot_descs.append(" / ".join(item.get_name() for item in slot.item_choices))
         return slot_descs
 
     def write_improvements(self, improvements):
@@ -119,8 +113,8 @@ class ImprovementsSheetGenerator(SheetGenerator):
         slot_descs = []
         for i, slot in zip_longest(range(1, 5), worker_slots[0:4]):
             if slot:
-                descs = self.describe_buffs(slot["Buffs"])
-                slot_descs.append("\n".join(descs))
+                buffs = self.db.get_buffs_by_ids(slot["Buffs"])
+                slot_descs.append("\n".join(self.describe_buffs(buffs)))
             else:
                 slot_descs.append("")
 

@@ -3,13 +3,17 @@ from pprint import pp
 from typing import Union
 from warnings import warn
 import game_data.database
+from game_data.modifiers import get_modifier_text_params
 from game_data.zdata.utils import ensure_dict
+
+
+type GameDatabase = "game_data.database.GameDatabase"
 
 
 class GameObject:
     NAME_PROP = "Name"
 
-    def __init__(self, id: str, data: dict, *, db: "game_data.database.GameDatabase"):
+    def __init__(self, id: str, data: dict, *, db: GameDatabase):
         self.id = id
         self.data = data
         self.db = db
@@ -77,6 +81,10 @@ class Tech(GameObject):
     def is_transition_tech(self):
         return self.has_flag("TechFlags.CapstoneTech")
 
+    @property
+    def buffs(self):
+        return self.db.get_buffs_by_ids(self.get_as_list("GrantBuffs"))
+
 
 class Item(SimpleGameObject):
     @property
@@ -101,6 +109,16 @@ class Item(SimpleGameObject):
             return None
 
         return self.db.recipes.by.id[self.recipe_id]
+
+    @property
+    def amenity_buffs(self):
+        return self.db.get_buffs_by_ids(self.get_as_list("ActivateBuffs"))
+
+    @property
+    def supply_buffs(self):
+        return self.db.get_buffs_by_ids(
+            self.get_as_list("ActivateBuffsForImprovements")
+        )
 
 
 class Improvement(SimpleGameObject):
@@ -130,6 +148,24 @@ class Improvement(SimpleGameObject):
     def is_triumph(self):
         return self.has_flag("GrantedFlag.Triumph", flag_key="GrantedFlags")
 
+    @property
+    def supply_slots(self):
+        return [SupplySlot(slot, db=self.db) for slot in self.get("ItemOptions")]
+
+
+class SupplySlot:
+    def __init__(self, data: dict, *, db: GameDatabase):
+        self.data = data
+        self.db = db
+
+    @property
+    def item_id_choices(self):
+        return self.data["Options"].keys()
+
+    @property
+    def item_choices(self):
+        return [self.db.items.by.id[item_id] for item_id in self.item_id_choices]
+
 
 class Buff(SimpleGameObject):
     @property
@@ -139,6 +175,10 @@ class Buff(SimpleGameObject):
     @property
     def description(self):
         return self.get("Description")
+
+    def describe(self):
+        params = get_modifier_text_params(self.modifiers)
+        return self.db.get_text(self.description, params=params)
 
 
 class Government(SimpleGameObject):
@@ -244,3 +284,13 @@ class Unit(SimpleGameObject):
     @property
     def item_cost(self):
         return self.get("ItemCost")
+
+
+class ReligiousVerse(SimpleGameObject):
+    @property
+    def domain(self) -> str:
+        return self.get("Domain")
+
+    @property
+    def buff(self) -> "Buff":
+        return self.db.buffs.by.id[self.get("Buff")]

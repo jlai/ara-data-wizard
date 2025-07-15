@@ -85,6 +85,10 @@ class TechsSheetGenerator(SheetGenerator):
                 case _:
                     special.append(desc)
 
+        buffs = tech.buffs
+        if buffs:
+            special.extend(self.describe_buffs(buffs))
+
         obsoletes = sorted(self.db.get_name_text(id) for id in tech.obsoletes_ids)
 
         self.write_row(

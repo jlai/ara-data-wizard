@@ -102,21 +102,13 @@ class GoodsPageUpdater(WikiPageUpdater):
         # Amenity buffs
         template.add(
             "Ameni",
-            join_buff_descs(
-                self.describe_buff(buff_id)
-                for buff_id in getattr(item, "ActivateBuffs", [])
-                if buff_id
-            ),
+            join_buff_descs(self.describe_buff(buff) for buff in item.amenity_buffs),
         )
 
         # Supply buffs
         template.add(
             "Suppl",
-            join_buff_descs(
-                self.describe_buff(buff_id)
-                for buff_id in getattr(item, "ActivateBuffsForImprovements", [])
-                if buff_id
-            ),
+            join_buff_descs(self.describe_buff(buff) for buff in item.supply_buffs),
         )
 
         # Crafted in

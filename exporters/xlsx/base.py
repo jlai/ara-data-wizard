@@ -76,13 +76,5 @@ class SheetGenerator:
         self.sheet.autofit(300)
         self.sheet.freeze_panes(1, 1)
 
-    def describe_buffs(self, buff_ids):
-        descs = []
-        for buff_id in buff_ids:
-            if not buff_id:
-                continue
-
-            buff = self.db.buffs.by.id[buff_id]
-            params = get_modifier_text_params(buff.modifiers)
-            descs.append(self.get_text(buff.description, params=params))
-        return descs
+    def describe_buffs(self, buffs):
+        return [buff.describe() for buff in buffs]

@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from itertools import chain
 import os
 import glob
@@ -204,6 +204,13 @@ class GameDatabase:
 
         return texts
 
+    def get_buffs_by_ids(self, buff_ids: Iterable[str]) -> list[Buff]:
+        return [
+            self.buffs.by.id[buff_id]
+            for buff_id in buff_ids
+            if buff_id  # skip empty strings
+        ]
+
     def remove_internal(self):
         self.improvements.remove_many(
             self.improvements.where(
@@ -237,7 +244,7 @@ class GameDatabase:
         for improvement in self.improvements:
             for item_id in set(
                 chain.from_iterable(
-                    slot["Options"].keys() for slot in improvement.get("ItemOptions")
+                    slot.item_id_choices for slot in improvement.supply_slots
                 )
             ):
                 self.supplies.insert(

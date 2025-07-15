@@ -45,10 +45,8 @@ class ItemsSheetGenerator(SheetGenerator):
             self.write_item(item)
 
     def write_item(self, item: Item):
-        amenity_buffs = self.describe_buffs(item.get_as_list("ActivateBuffs"))
-        supply_buffs = self.describe_buffs(
-            item.get_as_list("ActivateBuffsForImprovements")
-        )
+        amenity_buffs = self.describe_buffs(item.amenity_buffs)
+        supply_buffs = self.describe_buffs(item.supply_buffs)
 
         supplied_improvements = sorted(
             set(

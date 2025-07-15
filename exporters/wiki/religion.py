@@ -2,6 +2,7 @@ import textwrap
 from exporters.wiki.base import (
     WikiPageUpdater,
 )
+from game_data.objects import ReligiousVerse
 
 
 class ReligiousVersesUpdater(WikiPageUpdater):
@@ -25,11 +26,11 @@ class ReligiousVersesUpdater(WikiPageUpdater):
         """
         )
 
-        for verse in self.db.get_object_table("ReligionBuffs"):
+        for verse in self.db.get_object_table("ReligionBuffs", ReligiousVerse):
             code += "|-\n"
-            code += "| " + self.get_domain_link(verse.Domain) + "\n"
-            code += "| " + self.db.get_text(verse.Name) + "\n"
-            code += "| " + self.describe_buff(verse.Buff) + "\n"
+            code += "| " + self.get_domain_link(verse.domain) + "\n"
+            code += "| " + verse.get_name() + "\n"
+            code += "| " + self.describe_buff(verse.buff) + "\n"
 
         code += "|}"
 

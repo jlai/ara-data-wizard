@@ -75,8 +75,8 @@ class TechsPageUpdater(WikiPageUpdater):
         for id in government_ids + special_ids:
             special.append(self.get_link_template(id))
 
-        for buff_id in tech.get("GrantBuffs"):
-            special.append(f"<div>{self.describe_buff(buff_id)}</div>")
+        for buff in tech.buffs:
+            special.append(f"<div>{self.describe_buff(buff)}</div>")
 
         template.add("Special", "<hr />".join(special))
         template.add(

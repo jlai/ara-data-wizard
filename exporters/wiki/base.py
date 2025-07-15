@@ -6,7 +6,7 @@ import requests
 
 from game_data.database import GameDatabase
 from game_data.modifiers import get_modifier_text_params, parse_modifier_actions
-from game_data.objects import Improvement
+from game_data.objects import Buff, Improvement
 
 BUFF_LINK_TERMS = {
     "City Knowledge": "{{Knowledge}}",
@@ -219,12 +219,8 @@ class WikiPageUpdater:
 
         return name
 
-    def describe_buff(self, buff_id):
-        buff = self.db.buffs.by.id[buff_id]
-
-        params = get_modifier_text_params(buff.modifiers)
-        text = self.db.get_text(buff.description, params=params)
-
+    def describe_buff(self, buff: Buff):
+        text = buff.describe()
         for term, replacement in BUFF_LINK_TERMS.items():
             text = text.replace(term, replacement)
 
