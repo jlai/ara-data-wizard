@@ -7,6 +7,7 @@ from exporters.wiki.base import (
 from mwparserfromhell.wikicode import Template
 
 from game_data.eras import ERA_RANKS
+from game_data.objects import Recipe
 
 GOODS_TEMPLATE_NAME = "GoodsCraft"
 
@@ -28,9 +29,9 @@ class GoodsPageUpdater(WikiPageUpdater):
         self.items = (
             self.db.items.where(
                 lambda item: (
-                    "Flags.Craftable" in item.Flags or "Flags.Warhead" in item.Flags
+                    item.has_flag("Flags.Craftable") or item.has_flag("Flags.Warhead")
                 )
-                and "Flags.Weapon" not in item.Flags
+                and not item.has_flag("Flags.Weapon")
             )
             .compute_field("english_name", lambda item: self.db.get_name_text(item.id))
             .create_index("english_name")
@@ -58,22 +59,26 @@ class GoodsPageUpdater(WikiPageUpdater):
         template.add("itemname", name)
 
         # Accelerators
-        recipe = self.db.recipes.by.id[item.RecipeID] if item.RecipeID else None
+        recipe: Recipe = (
+            self.db.recipes.by.id[item.recipe_id] if item.recipe_id else None
+        )
         if recipe:
+            ingredients = recipe.ingredients
+
             for accel_num in range(1, 4):
                 ingredient = (
-                    recipe.Ingredients[accel_num - 1]
-                    if len(recipe.Ingredients) >= accel_num
+                    ingredients[accel_num - 1]
+                    if len(ingredients) >= accel_num
                     else None
                 )
                 if not ingredient:
                     template.add(f"Accel{accel_num}", "")
                     continue
 
-                production_bonus = ingredient["ProductionBonus"]
+                production_bonus = ingredient.production_bonus
                 accel_options = []
 
-                for option_item_id, quantity in ingredient["Options"].items():
+                for option_item_id, quantity in ingredient.options.items():
                     option_item = self.db.items.by.id[option_item_id]
                     option_item_name = self.db.get_name_text(option_item_id)
                     option_item_wiki_id = self.get_wiki_id(option_item_name)
@@ -175,7 +180,7 @@ class GoodsPageUpdater(WikiPageUpdater):
             "Tech",
             "".join(
                 str(self.get_link_template(unlock.tech_id))
-                for unlock in self.db.unlocks.where(unlocks_id=item.RecipeID).orderby(
+                for unlock in self.db.unlocks.where(unlocks_id=item.recipe_id).orderby(
                     "era_rank"
                 )
             ),
@@ -184,7 +189,7 @@ class GoodsPageUpdater(WikiPageUpdater):
         return template
 
     def create_harvested_goods_template(self, item):
-        name = self.db.get_text(item.Name)
+        name = item.get_name()
 
         wiki_id = self.get_wiki_id(name)
 
@@ -213,7 +218,7 @@ class GoodsPageUpdater(WikiPageUpdater):
         )
 
         template.add(
-            "unlockedBy", self.get_sorted_links(self.db.get_techs_that_unlock(item.id))
+            "unlockedBy", self.get_sorted_links(tech.id for tech in item.unlocked_by)
         )
 
         return template
@@ -224,7 +229,7 @@ class GoodsPageUpdater(WikiPageUpdater):
 
         for item in self.items:
             era_id = self.db.get_earliest_era_id(
-                item.RecipeID
+                item.recipe_id
             ) or self.db.get_earliest_era_id(item.id)
             items_by_era.setdefault(era_id, []).append(item)
 
@@ -257,7 +262,7 @@ class GoodsPageUpdater(WikiPageUpdater):
         code = ""
 
         for item in self.db.items.where(
-            lambda x: "Flags.Resource" in x.Flags and "Flags.Hidden" not in x.Flags
+            lambda x: x.has_flag("Flags.Resource") and not x.has_flag("Flags.Hidden")
         ).orderby(lambda x: self.db.get_name_text(x.id)):
             code += str(self.create_harvested_goods_template(item)) + "\n"
 

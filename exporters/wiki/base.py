@@ -6,6 +6,7 @@ import requests
 
 from game_data.database import GameDatabase
 from game_data.modifiers import get_modifier_text_params, parse_modifier_actions
+from game_data.objects import Improvement
 
 BUFF_LINK_TERMS = {
     "City Knowledge": "{{Knowledge}}",
@@ -124,11 +125,10 @@ class WikiPageUpdater:
 
         match prefix:
             case "imp":
-                improvement = self.db.improvements.by.id[obj_id]
-                is_triumph = "GrantedFlag.Triumph" in (improvement.GrantedFlags or [])
+                improvement: Improvement = self.db.improvements.by.id[obj_id]
 
                 return create_anonymous_template(
-                    "TriuIcon" if is_triumph else "ImpIcon",
+                    "TriuIcon" if improvement.is_triumph else "ImpIcon",
                     f"{wiki_id}.png",
                     wiki_id,
                     css_class,
@@ -168,15 +168,14 @@ class WikiPageUpdater:
 
             case "rcp":
                 recipe = self.db.recipes.by.id[obj_id]
-                product_id = self.db.get_recipe_product(recipe)
 
                 return self.get_link_template(
-                    product_id, extra_css_class=extra_css_class
+                    recipe.product.id, extra_css_class=extra_css_class
                 )
 
             case "cup":
                 project = self.db.city_unit_projects.by.id[obj_id]
-                item = self.db.items.by.id[project.UnitItemCreated]
+                item = self.db.items.by.id[project.unit_item_id]
 
                 return self.get_link_template(
                     item.TargetUnitID, extra_css_class=extra_css_class
@@ -223,8 +222,8 @@ class WikiPageUpdater:
     def describe_buff(self, buff_id):
         buff = self.db.buffs.by.id[buff_id]
 
-        params = get_modifier_text_params(buff.Modifiers)
-        text = self.db.get_text(buff.Description, params=params)
+        params = get_modifier_text_params(buff.modifiers)
+        text = self.db.get_text(buff.description, params=params)
 
         for term, replacement in BUFF_LINK_TERMS.items():
             text = text.replace(term, replacement)

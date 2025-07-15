@@ -1,4 +1,4 @@
-from game_data.database import get_tech_obsoletes_ids, get_tech_unlocks_ids
+from game_data.objects import Tech
 from .base import SheetGenerator, ColumnTemplate
 from game_data.eras import ERA_RANKS
 from littletable import Table
@@ -27,10 +27,8 @@ class TechsSheetGenerator(SheetGenerator):
 
     def write_eras(self):
         techs_by_era = {}
-        for era_id, techs in self.db.techs.groupby(lambda tech: tech.Era, sort=True):
-            techs_by_era[era_id] = list(
-                techs.orderby(lambda tech: self.get_text(tech.Name))
-            )
+        for era_id, techs in self.db.techs.groupby(lambda tech: tech.era_id, sort=True):
+            techs_by_era[era_id] = list(techs.orderby(lambda tech: tech.get_name()))
 
         for era in self.db.eras.orderby(key=lambda era: ERA_RANKS[era.id]):
             self.write_section_header(self.get_text(era.nameKey))
@@ -40,10 +38,10 @@ class TechsSheetGenerator(SheetGenerator):
         for tech in techs:
             self.write_tech(tech)
 
-    def get_unique_unlocks(self, tech):
+    def get_unique_unlocks(self, tech: Tech):
         "Returns a set() of ids that are only unlocked by this tech"
 
-        unlocks_ids = get_tech_unlocks_ids(tech)
+        unlocks_ids = tech.unlocks_ids
 
         unlocked_elsewhere = (
             self.db.unlocks.where(unlocks_id=Table.is_in(unlocks_ids))
@@ -53,8 +51,8 @@ class TechsSheetGenerator(SheetGenerator):
 
         return set(unlocks_ids) - set(unlocked_elsewhere)
 
-    def write_tech(self, tech):
-        unlocks_ids = get_tech_unlocks_ids(tech)
+    def write_tech(self, tech: Tech):
+        unlocks_ids = tech.unlocks_ids
 
         unique_unlocks = self.get_unique_unlocks(tech)
 
@@ -79,7 +77,7 @@ class TechsSheetGenerator(SheetGenerator):
                     resources.append(desc)
                 case "rcp":
                     recipe = self.db.recipes.by.id[id]
-                    product_id = self.db.get_recipe_product(recipe)
+                    product_id = recipe.product.id
                     if product_id.startswith("unt_"):
                         units.append(desc)
                     else:
@@ -87,14 +85,12 @@ class TechsSheetGenerator(SheetGenerator):
                 case _:
                     special.append(desc)
 
-        obsoletes = sorted(
-            self.db.get_name_text(id) for id in get_tech_obsoletes_ids(tech)
-        )
+        obsoletes = sorted(self.db.get_name_text(id) for id in tech.obsoletes_ids)
 
         self.write_row(
             [
-                self.get_text(tech.Name),
-                tech.uiResearchCost,
+                tech.get_name(),
+                tech.research_cost,
                 "\n".join(improvements),
                 "\n".join(items),
                 "\n".join(resources),

@@ -3,6 +3,7 @@ import os.path
 from game_data.database import GameDatabase
 from game_data.eras import ERA_RANKS
 from game_data.images import extract_atlas_images
+from game_data.objects import Item
 
 
 def export_to_graphviz(
@@ -27,30 +28,28 @@ def export_to_graphviz(
     included_item_ids = set()
     item_colors = {}
 
+    item: Item
     for item in db.items:
-        era_id = db.get_earliest_era_id(item.RecipeID) or db.get_earliest_era_id(
+        era_id = db.get_earliest_era_id(item.recipe_id) or db.get_earliest_era_id(
             item.id
         )
         era_rank = ERA_RANKS.get(era_id) or 0
 
         if (
-            getattr(item, "TargetUnitID", None)
-            or not ("Flags.Craftable" in item.Flags or "Flags.Resource" in item.Flags)
-            or "HideUnlessDebug" in item.Flags
+            item.is_unit
+            or not (item.has_flag("Flags.Craftable") or item.has_flag("Flags.Resource"))
             or item.id == "itm_Money"
             or item.id == "itm_Energy"
             or era_rank > ERA_RANKS[for_era]
-            or not item.Name.startswith("TXT_")
+            or not item.name.startswith("TXT_")
         ):
             continue
 
         color = ""
-        if "Flags.Resource" in item.Flags:
+        if item.has_flag("Flags.Resource"):
             # Raw resources
             color = "burlywood"
-        elif getattr(item, "ActivateBuffs", None) or getattr(
-            item, "ActivateBuffsForImprovements"
-        ):
+        elif item.get("ActivateBuffs") or item.get("ActivateBuffsForImprovements"):
             # Items with buffs
             color = "darkolivegreen4"
         else:
@@ -62,7 +61,7 @@ def export_to_graphviz(
         name = db.get_name_text(item.id)
         dot.node(
             item.id,
-            f"""<<table border="0"><tr><td>{name}</td></tr><tr><td><img src="graphvis_images/items/{item.AtlasID}.png"/></td></tr></table>>""",
+            f"""<<table border="0"><tr><td>{name}</td></tr><tr><td><img src="graphvis_images/items/{item.get("AtlasID")}.png"/></td></tr></table>>""",
             color=color,
         )
 
@@ -70,12 +69,12 @@ def export_to_graphviz(
 
     edges = []
     for recipe in db.recipes:
-        product_id = recipe.ItemCreated
+        product_id = recipe.product.id
         if product_id not in included_item_ids:
             continue
 
-        for ingredient in recipe.Ingredients:
-            for item_id in ingredient["Options"].keys():
+        for ingredient in recipe.ingredients:
+            for item_id in ingredient.options.keys():
                 if item_id not in included_item_ids:
                     continue
                 edges.append((item_id, product_id))
@@ -84,7 +83,7 @@ def export_to_graphviz(
                     product_id,
                     color=item_colors[item_id],
                     labelfontcolor=item_colors[item_id],
-                    headlabel=db.get_text(db.items.by.id[item_id].Name),
+                    headlabel=db.items.by.id[item_id].get_name(),
                 )
 
     # Create images

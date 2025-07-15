@@ -5,9 +5,8 @@ from exporters.wiki.base import (
 )
 from mwparserfromhell.wikicode import Template
 
-from littletable import Table
-from game_data.database import has_flag
 from game_data.eras import ERA_RANKS
+from game_data.objects import Unit
 
 FORCE_DOMAINS = {
     "RulesTypes.FormationType.Land": types.SimpleNamespace({"name": "Land"}),
@@ -43,27 +42,22 @@ ROLE_NAMES = {
 class UnitsPageUpdater(WikiPageUpdater):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.city_unit_projects = self.db.city_unit_projects.create_index(
-            "UnitItemCreated", unique=True
-        )
         self.army_game_rules = self.db.get_object_table("GameRules").by.id[
             "ArmyGameRules"
         ]
-        self.damage_types_strings = self.army_game_rules.DamageTypesStrings
+        self.damage_types_strings = self.army_game_rules.get("DamageTypesStrings")
 
-    def create_unit_template(self, unit):
-        name = self.db.get_text(unit.Name)
+    def create_unit_template(self, unit: Unit):
+        name = unit.get_name()
 
         wiki_id = self.get_wiki_id(name)
 
-        recipe_id = self.get_unit_recipe_id(unit)
-        recipe = self.db.recipes.by.id[recipe_id]
-        unit_item_id = recipe.ItemCreated
-        project = self.city_unit_projects.by.UnitItemCreated[unit_item_id]
+        recipe = unit.recipe
+        project = unit.project
 
-        tech_ids = self.db.get_techs_that_unlock(recipe_id)
+        tech_ids = [tech.id for tech in recipe.unlocked_by]
 
-        earliest_era = self.db.eras.by.id[self.db.get_earliest_era_id(recipe_id)]
+        earliest_era = self.db.eras.by.id[self.db.get_earliest_era_id(recipe.id)]
         earliest_era_name = self.db.get_text(earliest_era.nameKey)
 
         template = Template(f"UnitsTableRow\n")
@@ -72,10 +66,10 @@ class UnitsPageUpdater(WikiPageUpdater):
         )  # establish newline convention
         template.add("anchorId", wiki_id)
         template.add("itemname", name)
-        template.add("Role", ROLE_NAMES[unit.Role])
+        template.add("Role", ROLE_NAMES[unit.role])
         template.add(
             "DamageType",
-            self.db.get_text(self.damage_types_strings[unit.DamageType]["name"]),
+            self.db.get_text(self.damage_types_strings[unit.damage_type]["name"]),
         )
         template.add("EraSort", ERA_RANKS[earliest_era.id])
         template.add("Era", earliest_era_name)
@@ -84,7 +78,7 @@ class UnitsPageUpdater(WikiPageUpdater):
             "".join(str(self.get_link_template(id)) for id in tech_ids),
         )
 
-        strength = unit.uiBaseStrength
+        strength = unit.base_strength
         strength2 = math.floor(strength * 1.175)
         strength3 = math.floor(strength * 1.175 * 1.15)
 
@@ -92,22 +86,24 @@ class UnitsPageUpdater(WikiPageUpdater):
         template.add("Strength2", strength2)
         template.add("Strength3", strength3)
 
-        template.add("Speed", unit.uiBaseSpeed)
-        template.add("Range", unit.uiBombardRange)
+        template.add("Speed", unit.base_speed)
+        template.add("Range", unit.bombard_range)
         template.add(
             "Cost",
             self.describe_item_costs(
-                project.ItemCost, production_cost=project.uiProductionCost
+                project.get("ItemCost"), production_cost=project.get("uiProductionCost")
             ),
         )
-        template.add("Maintenance", self.describe_item_costs(unit.MaintenanceCost))
+        template.add(
+            "Maintenance", self.describe_item_costs(unit.get("MaintenanceCost"))
+        )
 
         notes = []
-        if unit.uiBaseReligionStrength:
-            notes.append(f"{unit.uiBaseReligionStrength} spread religion")
+        if unit.base_religion_strength:
+            notes.append(f"{unit.base_religion_strength} spread religion")
 
-        if has_flag(unit, "Actions.CanNavigateCoast") and not has_flag(
-            unit, "Actions.CanNavigateOcean"
+        if unit.has_flag("Actions.CanNavigateCoast") and not unit.has_flag(
+            "Actions.CanNavigateOcean"
         ):
             notes.append("Coastal only")
 
@@ -115,21 +111,16 @@ class UnitsPageUpdater(WikiPageUpdater):
 
         return template
 
-    def get_unit_recipe_id(self, unit):
-        item_id = list(unit.ConstructionCost.keys())[0]
-        item = self.db.items.by.id[item_id]
-        return item.RecipeID
-
     def get_unit_era(self, unit):
-        return self.db.get_earliest_era_id(self.get_unit_recipe_id(unit))
+        return self.db.get_earliest_era_id(unit.recipe.id)
 
     def write_units(self, *, output_filename):
         code = ""
 
         all_units = self.db.units.where(
-            lambda unit: not has_flag(unit, "Actions.ItemToCreateNotRequired")
+            lambda unit: not unit.has_flag("Actions.ItemToCreateNotRequired")
         )
-        all_units.create_index("Type")
+        all_units.create_index("type")
 
         for i, (domain_id, domain) in enumerate(FORCE_DOMAINS.items()):
             domain_header = Template("UnitsTableDomain")
@@ -143,9 +134,10 @@ class UnitsPageUpdater(WikiPageUpdater):
 
             code += "\n" + str(domain_header) + "\n"
 
+            unit: Unit
             for unit in sorted(
-                all_units.by.Type[domain_id],
-                key=lambda unit: unit.uiBaseStrength,
+                all_units.by.type[domain_id],
+                key=lambda unit: unit.base_strength,
             ):
                 code += str(self.create_unit_template(unit)) + "\n"
 

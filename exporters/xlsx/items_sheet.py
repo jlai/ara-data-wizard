@@ -1,3 +1,4 @@
+from game_data.objects import Item, Recipe
 from .base import SheetGenerator, ColumnTemplate
 from game_data.eras import ERA_RANKS
 from game_data.modifiers import get_modifier_text_params
@@ -27,13 +28,10 @@ class ItemsSheetGenerator(SheetGenerator):
 
     def write_eras(self):
         items_by_era = {}
-        for era_id, items in self.db.items.where(
-            lambda item: "Flags.HideUnlessDebug" not in item.Flags
-            and not getattr(item, "TargetUnitID", None)
-        ).groupby(lambda item: self.db.get_earliest_era_id(item.RecipeID), sort=True):
-            items_by_era[era_id] = list(
-                items.orderby(lambda item: self.get_text(item.Name))
-            )
+        for era_id, items in self.db.items.where(lambda item: not item.is_unit).groupby(
+            lambda item: self.db.get_earliest_era_id(item.recipe_id), sort=True
+        ):
+            items_by_era[era_id] = list(items.orderby(lambda item: item.get_name()))
 
         for era in self.db.eras.orderby(key=lambda era: ERA_RANKS[era.id]):
             self.write_section_header(self.get_text(era.nameKey))
@@ -46,16 +44,10 @@ class ItemsSheetGenerator(SheetGenerator):
         for item in items:
             self.write_item(item)
 
-    def write_item(self, item):
-        techs = (
-            self.db.unlocks.where(unlocks_id=item.RecipeID)
-            .join(self.db.techs, tech_id="id")
-            .orderby("era_rank")
-        )
-
-        amenity_buffs = self.describe_buffs(getattr(item, "ActivateBuffs", []))
+    def write_item(self, item: Item):
+        amenity_buffs = self.describe_buffs(item.get_as_list("ActivateBuffs"))
         supply_buffs = self.describe_buffs(
-            getattr(item, "ActivateBuffsForImprovements", [])
+            item.get_as_list("ActivateBuffsForImprovements")
         )
 
         supplied_improvements = sorted(
@@ -71,26 +63,22 @@ class ItemsSheetGenerator(SheetGenerator):
         )
 
         production_cost = ""
-
-        try:
-            recipe = self.db.recipes.by.id[item.RecipeID]
-        except:
-            recipe = None
+        recipe = item.recipe
 
         accelerators = ["", "", ""]
         if recipe:
-            production_cost = recipe.ProductionCost
+            production_cost = recipe.production_cost
 
-            for i, ingredient in enumerate((recipe.Ingredients or [])[0:3]):
+            for i, ingredient in enumerate((recipe.ingredients)[0:3]):
                 accelerators[i] = (
-                    " /\n".join(self.db.get_item_quantities(ingredient["Options"]))
-                    + f"\n\n{ingredient['ProductionBonus']:+g} ⚙️"
+                    " /\n".join(self.db.get_item_quantities(ingredient.options))
+                    + f"\n\n{ingredient.production_bonus:+g} ⚙️"
                 )
 
         self.write_row(
             [
-                self.get_text(item.Name),
-                "\n".join([self.get_text(tech.Name) for tech in techs]),
+                item.get_name(),
+                "\n".join([tech.get_name() for tech in item.unlocked_by]),
                 "\n".join(amenity_buffs),
                 "\n".join(supply_buffs),
                 "\n".join(supplied_improvements),

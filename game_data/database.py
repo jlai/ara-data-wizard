@@ -1,13 +1,26 @@
+from collections.abc import Callable
 from itertools import chain
 import os
 import glob
 import pickle
 import time
 import types
+from typing import Type
 from warnings import warn
 from littletable import Table
 
-from game_data.zdata.utils import ensure_dict, has_flag
+from game_data.objects import (
+    Buff,
+    CityUnitProject,
+    Government,
+    Improvement,
+    Item,
+    Recipe,
+    Tech,
+    SimpleGameObject,
+    Unit,
+)
+from game_data.zdata.utils import ensure_dict
 from game_data.zdata.game_core_data import GameCoreDataLoader
 from .eras import ERA_RANKS
 
@@ -16,30 +29,6 @@ from game_data.translations import (
     LocalizedStrings,
     parse_translation_file,
 )
-
-
-def get_tech_unlocks_ids(tech):
-    return (
-        getattr(tech, "UnlockImprovementsIDs", [])
-        + getattr(tech, "UnlockRecipesIDs", [])
-        + getattr(tech, "UnlockFormationsIDs", [])
-        + getattr(tech, "UnlockGovernmentsIDs", [])
-        + getattr(tech, "UnlockCitySpecialProjects", [])
-        + getattr(tech, "UnlockCityMissileProjects", [])
-        + [obj["Value"] for obj in getattr(tech, "UnlockNaturalResourcesIDs", [])]
-    )
-
-
-def get_tech_obsoletes_ids(tech):
-    return (
-        getattr(tech, "ObsoleteImprovementIDs", [])
-        + getattr(tech, "ObsoleteCityUnitProjectIDs", [])
-        + getattr(tech, "ObsoleteRecipes", [])
-    )
-
-
-def is_improvement_a_triumph(improvement):
-    return has_flag(improvement, "GrantedFlag.Triumph", flag_key="GrantedFlags")
 
 
 class GameDatabase:
@@ -69,15 +58,18 @@ class GameDatabase:
 
         self.game_data = self.strip_DLCs(self.load_game_data())
         self.all_objects = self.setup_all_objects_table()
-        self.improvements = self.get_object_table("Improvements")
-        self.techs = self.get_object_table("Technologies")
-        self.items = self.get_object_table("ItemTemplates")
-        self.buffs = self.get_object_table("BuffTemplates")
-        self.recipes = self.get_object_table("Recipes")
-        self.units = self.get_object_table("UnitTemplates")
+        self.improvements = self.get_object_table("Improvements", Improvement)
+        self.techs = self.get_object_table("Technologies", Tech)
+        self.items = self.get_object_table("ItemTemplates", Item)
+        self.buffs = self.get_object_table("BuffTemplates", Buff)
+        self.recipes = self.get_object_table("Recipes", Recipe)
+        self.units = self.get_object_table("UnitTemplates", Unit)
         self.formations = self.get_object_table("ArmyTemplates")
-        self.governments = self.get_object_table("Governments")
-        self.city_unit_projects = self.get_object_table("CityUnitProjects")
+        self.governments = self.get_object_table("Governments", Government)
+        self.city_unit_projects = self.get_object_table(
+            "CityUnitProjects", CityUnitProject
+        )
+        self.city_unit_projects.create_index("unit_item_id", unique=True)
         self.city_special_projects = self.get_object_table("CitySpecialProjects")
         self.city_missile_projects = self.get_object_table("CityMissileProjects")
         self.natural_resources = self.get_object_table("NaturalResourceTemplates")
@@ -169,12 +161,14 @@ class GameDatabase:
 
         return all_objects
 
-    def get_object_table(self, group_key: str):
+    def get_object_table[T](
+        self, group_key: str, constructor: Type[T] = SimpleGameObject
+    ) -> Table[T]:
         table = Table(group_key)
         table.create_index("id", True)
 
         for key, obj in self.game_data[group_key].items():
-            table.insert(types.SimpleNamespace({"id": key, **obj}))
+            table.insert(constructor(key, obj, db=self))
 
         return table
 
@@ -205,7 +199,7 @@ class GameDatabase:
 
         for key, count in d.items():
             item = self.items.by.id[key]
-            item_name = self.get_text(item.Name, count=count)
+            item_name = item.get_name(count=count)
             texts.append(f"{count:d} {item_name}")
 
         return texts
@@ -218,57 +212,55 @@ class GameDatabase:
         )
         self.natural_resources.remove_many(
             self.natural_resources.where(
-                lambda nrc: "NaturalResourceFlags.NotSpawnable" in (nrc.Flags or [])
+                lambda nrc: nrc.has_flag("NaturalResourceFlags.NotSpawnable")
             )
         )
         self.items.remove_many(
             self.items.where(
                 lambda item: item.id != "itm_Money"
-                and ("Flags.HideUnlessDebug" in (item.Flags or []))
+                and item.has_flag("Flags.HideUnlessDebug")
             )
         )
 
     def build_crossrefs(self):
         for tech in self.techs:
-            for unlock in get_tech_unlocks_ids(tech):
+            for unlock in tech.unlocks_ids:
                 self.unlocks.insert(
                     {
                         "unlocks_id": unlock,
                         "tech_id": tech.id,
-                        "era_id": tech.Era,
-                        "era_rank": ERA_RANKS[tech.Era],
+                        "era_id": tech.data["Era"],
+                        "era_rank": ERA_RANKS[tech.data["Era"]],
                     }
                 )
 
         for improvement in self.improvements:
             for item_id in set(
                 chain.from_iterable(
-                    slot["Options"].keys() for slot in improvement.ItemOptions
+                    slot["Options"].keys() for slot in improvement.get("ItemOptions")
                 )
             ):
                 self.supplies.insert(
                     {
                         "item_id": item_id,
                         "improvement_id": improvement.id,
-                        "improvement_name": improvement.Name,
+                        "improvement_name": improvement.name,
                     }
                 )
 
-            for recipe_id in improvement.Recipes:
-                recipe = self.recipes.by.id[recipe_id]
-                item_id = recipe.ItemCreated
-                output_id = self.get_recipe_product(recipe)
+            for recipe in improvement.recipes:
+                output_id = recipe.product.id
 
                 # Unit recipes are not really used right now
                 if output_id.startswith("unt_"):
                     continue
 
                 self.crafting_locations.insert(
-                    {"item_id": item_id, "improvement_id": improvement.id}
+                    {"item_id": output_id, "improvement_id": improvement.id}
                 )
 
-                for ingredient in recipe.Ingredients:
-                    for input_item_id, quantity in ingredient["Options"].items():
+                for ingredient in recipe.ingredients:
+                    for input_item_id, quantity in ingredient.options.items():
                         self.item_costs.insert(
                             {
                                 "type": "recipe",
@@ -278,7 +270,7 @@ class GameDatabase:
                             }
                         )
 
-            for worker_slot in getattr(improvement, "WorkerSlots", []):
+            for worker_slot in improvement.get("WorkerSlots", []):
                 for input_item_id, quantity in ensure_dict(
                     worker_slot.get("Maintenance", {})
                 ).items():
@@ -291,8 +283,8 @@ class GameDatabase:
                         }
                     )
 
-            for input_item_id, quantity in ensure_dict(
-                improvement.BuildImprovementItemCost
+            for input_item_id, quantity in improvement.get_as_dict(
+                "BuildImprovementItemCost"
             ).items():
                 self.item_costs.insert(
                     {
@@ -304,21 +296,21 @@ class GameDatabase:
                 )
 
         for project in self.city_unit_projects:
-            unit_item = self.items.by.id[project.UnitItemCreated]
+            unit_item = self.items.by.id[project.unit_item_id]
 
-            for item_id, count in ensure_dict(project.ItemCost).items():
+            for item_id, count in ensure_dict(project.get("ItemCost")).items():
 
                 self.item_costs.insert(
                     {
                         "type": "build",
-                        "output_id": unit_item.TargetUnitID,
+                        "output_id": unit_item.get("TargetUnitID"),
                         "input_item_id": item_id,
                         "input_item_quantity": count,
                     }
                 )
 
         for nrc in self.natural_resources:
-            for option in nrc.HarvestOptions:
+            for option in nrc.get("HarvestOptions"):
                 self.item_costs.insert(
                     {
                         "type": "harvest",
@@ -328,9 +320,12 @@ class GameDatabase:
                     }
                 )
 
-    def get_techs_that_unlock(self, obj_id):
+    def get_techs_that_unlock(self, obj_id) -> list[Tech]:
         return list(
-            self.unlocks.where(unlocks_id=obj_id).orderby("era_rank").all.tech_id
+            self.techs.by.id[tech_id]
+            for tech_id in self.unlocks.where(unlocks_id=obj_id)
+            .orderby("era_rank")
+            .all.tech_id
         )
 
     def load_translations(self, locale_id="en"):
@@ -359,15 +354,6 @@ class GameDatabase:
             return earliest_unlock.era_id
         return ""
 
-    def get_recipe_product(self, recipe):
-        "Resolve recipe to a normal item or a unit (instead of the pseudo-item for a unit)"
-        item = self.items.by.id[recipe.ItemCreated]
-
-        if getattr(item, "TargetUnitID", None):
-            return item.TargetUnitID
-
-        return item.id
-
     def get_name_text(self, id: str, count=1):
         return self.get_text(self.get_name_key(id), count=count)
 
@@ -376,29 +362,28 @@ class GameDatabase:
 
         match prefix:
             case "imp":
-                return self.improvements.by.id[id].Name
+                return self.improvements.by.id[id].name
             case "itm":
-                return self.items.by.id[id].Name
+                return self.items.by.id[id].name
             case "rcp":
                 recipe = self.recipes.by.id[id]
-                output_id = self.get_recipe_product(recipe)
-                return self.get_name_key(output_id)
+                return self.get_name_key(recipe.product.id)
             case "tch":
-                return self.techs.by.id[id].Name
+                return self.techs.by.id[id].name
             case "unt":
-                return self.units.by.id[id].Name
+                return self.units.by.id[id].name
             case "frm":
-                return self.formations.by.id[id].Name
+                return self.formations.by.id[id].name
             case "gvt":
-                return self.governments.by.id[id].m_Name
+                return self.governments.by.id[id].name
             case "cup":
                 cup = self.city_unit_projects.by.id[id]
-                item = self.items.by.id[cup.UnitItemCreated]
-                unit = self.units.by.id[item.TargetUnitID]
-                return unit.Name
+                item = self.items.by.id[cup.unit_item_id]
+                unit = self.units.by.id[item.target_unit_id]
+                return unit.name
             case "csp":
-                return self.city_special_projects.by.id[id].Name
+                return self.city_special_projects.by.id[id].name
             case "cmp":
-                return self.city_missile_projects.by.id[id].Name
+                return self.city_missile_projects.by.id[id].name
             case "nrc":
-                return self.natural_resources.by.id[id].Name
+                return self.natural_resources.by.id[id].name

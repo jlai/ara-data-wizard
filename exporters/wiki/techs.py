@@ -3,20 +3,15 @@ from exporters.wiki.base import (
 )
 from mwparserfromhell.wikicode import Template
 
-from game_data.database import get_tech_obsoletes_ids, is_improvement_a_triumph
-from game_data.zdata.utils import has_flag
-
-
-def is_transition_tech(tech):
-    return has_flag(tech, "TechFlags.CapstoneTech")
+from game_data.objects import Tech
 
 
 class TechsPageUpdater(WikiPageUpdater):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def create_tech_template(self, tech):
-        name = self.db.get_text(tech.Name)
+    def create_tech_template(self, tech: Tech):
+        name = tech.get_name()
 
         wiki_id = self.get_wiki_id(name)
 
@@ -26,14 +21,14 @@ class TechsPageUpdater(WikiPageUpdater):
         )  # establish newline convention
         template.add("anchorId", wiki_id)
         template.add("itemname", name)
-        template.add("Cost", tech.uiResearchCost)
+        template.add("Cost", tech.research_cost)
 
         triumph_ids = set(
             id
-            for id in tech.UnlockImprovementsIDs
-            if is_improvement_a_triumph(self.db.improvements.by.id[id])
+            for id in tech.get("UnlockImprovementsIDs", [])
+            if self.db.improvements.by.id[id].is_triumph
         )
-        improvement_ids = set(tech.UnlockImprovementsIDs) - triumph_ids
+        improvement_ids = set(tech.get("UnlockImprovementsIDs", [])) - triumph_ids
         buildings = [
             self.get_sorted_links(improvement_ids),
             self.get_sorted_links(triumph_ids),
@@ -44,22 +39,22 @@ class TechsPageUpdater(WikiPageUpdater):
         item_ids = []
         unit_ids = []
         harvested_item_ids = []
-        formation_ids = tech.UnlockedFormationsIDs
-        government_ids = tech.UnlockGovernmentsIDs
-        special_ids = getattr(tech, "UnlockCitySpecialProjects", []) + getattr(
-            tech, "UnlockCityMissileProjects", []
+        formation_ids = tech.get("UnlockFormationIDs", [])
+        government_ids = tech.get("UnlockGovernmentsIDs", [])
+        special_ids = tech.get("UnlockCitySpecialProjects", []) + tech.get(
+            "UnlockCityMissilePorjects", []
         )
 
         for product_id in (
-            self.db.get_recipe_product(self.db.recipes.by.id[recipe_id])
-            for recipe_id in tech.UnlockRecipesIDs
+            self.db.recipes.by.id[recipe_id].product.id
+            for recipe_id in tech.get("UnlockRecipesIDs", [])
         ):
             if product_id.startswith("itm_"):
                 item_ids.append(product_id)
             elif product_id.startswith("unt_"):
                 unit_ids.append(product_id)
 
-        for unlock in tech.UnlockNaturalResourcesIDs:
+        for unlock in tech.get("UnlockNaturalResourcesIDs", []):
             harvested_item_ids.append(unlock["Value"])
 
         military = []
@@ -74,22 +69,22 @@ class TechsPageUpdater(WikiPageUpdater):
 
         special = []
 
-        if is_transition_tech(tech):
+        if tech.is_transition_tech:
             special.append("<div>Age transition</div>")
 
         for id in government_ids + special_ids:
             special.append(self.get_link_template(id))
 
-        for buff_id in tech.GrantBuffs:
+        for buff_id in tech.get("GrantBuffs"):
             special.append(f"<div>{self.describe_buff(buff_id)}</div>")
 
         template.add("Special", "<hr />".join(special))
         template.add(
             "Obsoletes",
-            self.get_sorted_links(get_tech_obsoletes_ids(tech), "obsolete"),
+            self.get_sorted_links(tech.obsoletes_ids, "obsolete"),
         )
 
-        if is_transition_tech(tech):
+        if tech.is_transition_tech:
             template.add("ExtraClasses", "age-transition")
 
         return template
@@ -99,8 +94,7 @@ class TechsPageUpdater(WikiPageUpdater):
         techs_by_era = {}
 
         for tech in self.db.techs:
-            era_id = tech.Era
-            techs_by_era.setdefault(era_id, []).append(tech)
+            techs_by_era.setdefault(tech.era_id, []).append(tech)
 
         for era in self.db.eras.orderby("rank"):
             era_name = self.db.get_text(era.nameKey)
@@ -120,7 +114,7 @@ class TechsPageUpdater(WikiPageUpdater):
             for tech in sorted(
                 techs_by_era[era.id],
                 key=lambda tech: (
-                    1 if is_transition_tech(tech) else 0,
+                    1 if tech.is_transition_tech else 0,
                     self.db.get_name_text(tech.id),
                 ),
             ):

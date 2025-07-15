@@ -83,6 +83,6 @@ class SheetGenerator:
                 continue
 
             buff = self.db.buffs.by.id[buff_id]
-            params = get_modifier_text_params(buff.Modifiers)
-            descs.append(self.get_text(buff.Description, params=params))
+            params = get_modifier_text_params(buff.modifiers)
+            descs.append(self.get_text(buff.description, params=params))
         return descs

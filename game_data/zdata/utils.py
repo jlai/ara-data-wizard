@@ -9,8 +9,3 @@ def ensure_dict(obj):
     elif obj is None:
         return {}
     return obj
-
-
-def has_flag(obj, flag, flag_key="Flags"):
-    flags = getattr(obj, flag_key, []) or []
-    return flag in flags

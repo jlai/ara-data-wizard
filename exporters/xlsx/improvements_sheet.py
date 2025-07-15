@@ -1,9 +1,10 @@
 from itertools import zip_longest
 from natsort import natsorted
 
+from game_data.objects import Improvement
+
 from .base import SheetGenerator, ColumnTemplate
 from game_data.eras import ERA_RANKS
-from game_data.modifiers import get_modifier_text_params
 
 
 class ImprovementsSheetGenerator(SheetGenerator):
@@ -39,7 +40,7 @@ class ImprovementsSheetGenerator(SheetGenerator):
             lambda improvement: self.db.get_earliest_era_id(improvement.id), sort=True
         ):
             improvements_by_era[era_id] = list(
-                improvements.orderby(lambda imp: self.get_text(imp.Name))
+                improvements.orderby(lambda imp: imp.get_name())
             )
 
         for era in self.db.eras.orderby(key=lambda era: ERA_RANKS[era.id]):
@@ -57,40 +58,35 @@ class ImprovementsSheetGenerator(SheetGenerator):
     def get_crafting_outputs(self, improvement):
         outputs = []
 
-        for recipe_id in improvement.Recipes:
-            recipe = self.db.recipes.by.id[recipe_id]
-            item = self.db.items.by.id[recipe.ItemCreated]
-            outputs.append(self.get_text(item.Name, count="other"))
+        for recipe in improvement.recipes:
+            outputs.append(self.get_text(recipe.product.name, count="other"))
 
         return outputs
 
     def get_crafting_inputs(self, improvement):
         inputs = set()
 
-        for recipe_id in improvement.Recipes:
-            recipe = self.db.recipes.by.id[recipe_id]
-
-            for ingredient in recipe.Ingredients:
-                for item_id in ingredient["Options"].keys():
+        for recipe in improvement.recipes:
+            for ingredient in recipe.ingredients:
+                for item_id in ingredient.options.keys():
                     if item_id == "itm_Money":
                         continue
 
                     item = self.db.items.by.id[item_id]
-                    name = self.get_text(item.Name, count="other")
+                    name = self.get_text(item.name, count="other")
                     inputs.add(name)
 
         return list(inputs)
 
     def get_supply_options(self, improvement):
-        slots = improvement.ItemOptions
+        slots = improvement.get("ItemOptions")
         slot_descs = []
 
         for slot in slots:
             options = slot["Options"].keys()
             slot_descs.append(
                 " / ".join(
-                    self.get_text(self.db.items.by.id[item_id].Name)
-                    for item_id in options
+                    self.db.items.by.id[item_id].get_name() for item_id in options
                 )
             )
         return slot_descs
@@ -99,31 +95,27 @@ class ImprovementsSheetGenerator(SheetGenerator):
         for improvement in improvements:
             self.write_improvement(improvement)
 
-    def write_improvement(self, improvement):
-        build_cost = self.db.get_item_quantities(improvement.BuildImprovementItemCost)
+    def write_improvement(self, improvement: Improvement):
+        build_cost = self.db.get_item_quantities(
+            improvement.get("BuildImprovementItemCost")
+        )
 
-        previous_level = improvement.PrevLevelID
+        previous_level = improvement.get("PrevLevelID")
         upgrade_info = ""
 
         if previous_level:
             previous_improvement = self.db.improvements.by.id[previous_level]
             upgrade_cost = self.db.get_item_quantities(
-                improvement.UpgradeToImprovementItemCost
+                improvement.get("UpgradeToImprovementItemCost")
             )
             upgrade_info = "\n".join(
                 [
-                    f"Upgrade from {self.get_text(previous_improvement.Name)}\n",
+                    f"Upgrade from {self.get_text(previous_improvement.name)}\n",
                     *upgrade_cost,
                 ]
             )
 
-        techs = (
-            self.db.unlocks.where(unlocks_id=improvement.id)
-            .join(self.db.techs, tech_id="id")
-            .orderby("era_rank")
-        )
-
-        worker_slots = improvement.WorkerSlots
+        worker_slots = improvement.get("WorkerSlots")
         slot_descs = []
         for i, slot in zip_longest(range(1, 5), worker_slots[0:4]):
             if slot:
@@ -145,15 +137,15 @@ class ImprovementsSheetGenerator(SheetGenerator):
 
         self.write_row(
             [
-                self.get_text(improvement.Name),
-                "\n".join([self.get_text(tech.Name) for tech in techs]),
-                improvement.uiNationMaxCount or "",
-                improvement.uiProvinceMaxCount or "",
+                improvement.get_name(),
+                "\n".join([tech.get_name() for tech in improvement.unlocked_by]),
+                improvement.nation_max_count or "",
+                improvement.province_max_count or "",
                 *slot_descs,
                 "\n".join(sorted(self.get_crafting_outputs(improvement))),
                 "\n".join(sorted(self.get_crafting_inputs(improvement))),
                 "\n".join(sorted(self.get_supply_options(improvement))),
-                improvement.uiProductionCost,
+                improvement.production_cost,
                 "\n".join(natsorted(build_cost)),
                 upgrade_info,
                 "\n".join(maintainance_costs),
