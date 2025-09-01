@@ -14,7 +14,7 @@ Expression to extract a string like @"MODS(stuff)MODS"
 """
 HERE_STRING = re.compile(r'@"(?P<marker>[A-Za-z]+)\((?P<content>.*)\)(?P=marker)"')
 
-NUMBER_SUFFIX = re.compile(r"(uu|u8|i8|i|u)$")
+NUMBER_SUFFIX = re.compile(r"(uu|u8|ul|i8|il|i|u)$")
 
 
 class WrappedValue:
